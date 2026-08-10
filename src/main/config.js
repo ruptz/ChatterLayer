@@ -48,7 +48,8 @@ const DEFAULTS = {
    */
   updates: {
     check: true,
-    /** Epoch ms of the last successful check; throttles it to once a day. */
+    /** Epoch ms of the last successful check. Informational — the check runs
+     *  once per launch and is not rate-limited on it. */
     lastCheck: 0,
     /** Newest tag seen, remembered so a launch with no network still knows. */
     latest: '',
@@ -83,6 +84,17 @@ const DEFAULTS = {
     maxLines: 4,
     showPartials: true,
     showSpeakerName: true,
+  },
+  /**
+   * The tray icon is always there — status, Show, Disconnect, Quit. This only
+   * decides what the window's × does.
+   *
+   * On by default because the alternative is that a reflexive click ends a live
+   * Discord connection and the caption feed mid-stream. Minimise is untouched
+   * either way, and Quit on the tray menu always means quit.
+   */
+  tray: {
+    closeToTray: true,
   },
 };
 

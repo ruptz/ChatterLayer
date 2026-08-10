@@ -27,6 +27,52 @@
           <span id="build-version">&mdash;</span>
         </button>
 
+        <!-- App behaviour, as opposed to caption settings: the things that are
+             about Chatterlayer itself rather than about what goes on stream. -->
+        <div class="settings">
+          <button
+            type="button"
+            class="cog"
+            id="settings-toggle"
+            aria-expanded="false"
+            aria-controls="settings-panel"
+            aria-label="App settings"
+            title="App settings"
+          >
+            <svg
+              viewBox="0 0 16 16"
+              width="15"
+              height="15"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+            >
+              <!-- Body ring, hub, then teeth sitting on the ring. Without the
+                   outer circle this reads as a sun, not a cog. -->
+              <circle cx="8" cy="8" r="4.8" />
+              <circle cx="8" cy="8" r="1.9" />
+              <path
+                d="M8 3.1V1.7M8 12.9v1.4M12.9 8h1.4M3.1 8H1.7M11.46 4.54l.99-.99M4.54 11.46l-.99.99M11.46 11.46l.99.99M4.54 4.54l-.99-.99"
+              />
+            </svg>
+          </button>
+
+          <div class="settings-panel" id="settings-panel" hidden>
+            <h3>App</h3>
+            <label class="check">
+              <input type="checkbox" id="close-to-tray" />
+              Keep running in the tray when closed
+            </label>
+            <p class="help">
+              Closing the window hides it instead of ending the call, so a
+              stray click can&rsquo;t cut your captions mid-stream. Minimising
+              is unaffected, and Quit on the tray icon always quits.
+            </p>
+          </div>
+        </div>
+
         <div class="status" id="tally" data-state="standby">
           <span class="dot"></span>
           <span id="status-text">Standby</span>
@@ -34,15 +80,18 @@
       </div>
     </header>
 
+    <!-- The desk is laid out the way signal travels: the patch bay across the
+         top, the live strips and the monitor on the left where you watch them,
+         and everything you set once down the right-hand rack. -->
     <main>
-      <!-- ------------------------------------------------------ source -->
-      <section class="card">
+      <!-- ------------------------------------------- source (patch bay) -->
+      <section class="card card-source">
         <div class="card-head">
           <h2>Source</h2>
           <span class="meta" id="model-path">Checking model&hellip;</span>
         </div>
         <div class="card-body">
-          <div class="grid-2">
+          <div class="grid-fields">
             <div class="field">
               <label class="label" for="token">Discord bot token</label>
               <div class="input-row">
@@ -68,243 +117,257 @@
               </div>
               <p class="help" id="auth-note">Signing in&hellip;</p>
             </div>
-          </div>
 
-          <div class="field channel-field">
-            <label class="label" for="voice-channel">Voice channel</label>
-            <select id="voice-channel"></select>
-            <p class="help" id="channel-note">
-              Only channels your bot can join are selectable.
-            </p>
-
-            <div class="manual" id="manual-channel" hidden>
-              <label class="label" for="channel">Voice channel ID</label>
-              <input
-                type="text"
-                id="channel"
-                placeholder="Right-click the channel &rarr; Copy Channel ID"
-                autocomplete="off"
-                spellcheck="false"
-              />
-              <p class="help">
-                Requires Developer Mode in Discord. Overrides the pickers above.
+            <div class="field">
+              <label class="label" for="voice-channel">Voice channel</label>
+              <select id="voice-channel"></select>
+              <p class="help" id="channel-note">
+                Only channels your bot can join are selectable.
               </p>
             </div>
+
+            <div class="field">
+              <label class="label" for="model">Speech model</label>
+              <div class="input-row">
+                <select id="model"></select>
+                <button type="button" class="btn btn-sm" id="manage-models">Get models</button>
+              </div>
+              <p class="help" id="model-note">
+                More accurate models use more memory and CPU.
+              </p>
+            </div>
+          </div>
+
+          <div class="manual" id="manual-channel" hidden>
+            <label class="label" for="channel">Voice channel ID</label>
+            <input
+              type="text"
+              id="channel"
+              placeholder="Right-click the channel &rarr; Copy Channel ID"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <p class="help">
+              Requires Developer Mode in Discord. Overrides the pickers above.
+            </p>
+          </div>
+
+          <ul class="models" id="model-list" hidden></ul>
+
+          <!-- The disclosure sits on the same line as the transport, so the
+               patch bay ends in one row instead of two half-empty ones. -->
+          <div class="actions source-foot">
             <button type="button" class="linky" id="toggle-manual">
               Enter a channel ID manually
             </button>
-          </div>
-
-          <div class="field model-field">
-            <label class="label" for="model">Speech model</label>
-            <div class="input-row">
-              <select id="model"></select>
-              <button type="button" class="btn btn-sm" id="manage-models">Get models</button>
-            </div>
-            <p class="help" id="model-note">
-              More accurate models use more memory and CPU.
-            </p>
-
-            <ul class="models" id="model-list" hidden></ul>
-          </div>
-
-          <div class="actions">
+            <span class="spacer"></span>
             <button class="btn btn-primary" id="start">Connect</button>
             <button class="btn btn-danger" id="stop" disabled>Disconnect</button>
           </div>
         </div>
       </section>
 
-      <!-- ---------------------------------------------------- channels -->
-      <section class="card">
-        <div class="card-head">
-          <h2>Channels</h2>
-          <span class="meta" id="speaker-count">0 on</span>
-        </div>
-        <div class="card-body">
-          <p class="help spaced">
-            Only channels switched on are transcribed. Switch anyone in or out
-            during the call &mdash; nothing restarts. Click a name to change how
-            it appears on captions.
-          </p>
-          <ul class="rows" id="members">
-            <li class="empty">Connect to see who&rsquo;s in the voice channel.</li>
-          </ul>
-        </div>
-      </section>
-
-      <!-- ------------------------------------------------------ output -->
-      <section class="card">
-        <div class="card-head">
-          <h2>Output</h2>
-        </div>
-        <div class="card-body">
-          <div class="url">
-            <span class="label">OBS browser source</span>
-            <code id="url-overlay">&mdash;</code>
-            <button class="btn btn-sm" data-copy="url-overlay">Copy</button>
+      <!-- ---------------------------------------------- the live desk -->
+      <div class="col col-live">
+        <!-- ------------------------------------------------ channels -->
+        <section class="card card-live">
+          <div class="card-head">
+            <h2>Channels</h2>
+            <span class="meta" id="speaker-count">0 on</span>
           </div>
-
-          <div class="grid-3">
-            <div class="field">
-              <label class="label" for="font-size">
-                Text size <em id="v-font">30</em>
-              </label>
-              <input type="range" id="font-size" min="14" max="64" step="1" />
-            </div>
-            <div class="field">
-              <label class="label" for="lifetime">
-                Hold <em id="v-life">7.0s</em>
-              </label>
-              <input type="range" id="lifetime" min="2000" max="20000" step="500" />
-            </div>
-            <div class="field">
-              <label class="label" for="max-lines">
-                Max lines <em id="v-lines">4</em>
-              </label>
-              <input type="range" id="max-lines" min="1" max="8" step="1" />
-            </div>
-          </div>
-
-          <div class="checks">
-            <label class="check">
-              <input type="checkbox" id="show-partials" />
-              Live partial text
-            </label>
-            <label class="check">
-              <input type="checkbox" id="show-names" />
-              Speaker names
-            </label>
-          </div>
-
-          <div class="actions bordered">
-            <label class="label inline" for="port">Port</label>
-            <input type="number" id="port" min="1024" max="65535" class="narrow" />
-            <span class="spacer"></span>
-            <label
-              class="check"
-              title="Asks GitHub once a day whether a newer release exists. Nothing is downloaded or installed. This is the only request Chatterlayer makes on its own."
-            >
-              <input type="checkbox" id="check-updates" />
-              Check for updates
-            </label>
-            <button class="btn btn-ghost btn-sm" id="clear">Clear captions</button>
-            <button class="btn btn-ghost btn-sm" id="reveal">Show config file</button>
-          </div>
-        </div>
-      </section>
-
-      <!-- ---------------------------------------------- remote overlay -->
-      <section class="card">
-        <div class="card-head">
-          <h2>Remote overlay</h2>
-          <span class="meta" id="share-meta">Off</span>
-        </div>
-        <div class="card-body">
-          <label class="check">
-            <input type="checkbox" id="share-enabled" />
-            Let other streamers use these captions
-          </label>
-
-          <p class="help spaced">
-            Opens a Cloudflare tunnel so everyone co-streaming can point OBS at
-            one link, instead of each running their own bot and speech model.
-            Nothing leaves this machine until you press Start, and the tunnel is
-            always closed again when Chatterlayer starts up.
-          </p>
-
-          <div id="share-panel" hidden>
-            <div class="actions">
-              <button class="btn btn-primary" id="share-start">Start tunnel</button>
-              <button class="btn btn-danger" id="share-stop" disabled>Stop tunnel</button>
-              <span class="spacer"></span>
-              <button
-                class="btn btn-ghost btn-sm"
-                id="share-rotate"
-                title="Mints a new access key and disconnects anyone using the old link."
-              >
-                New access key
-              </button>
-            </div>
-
-            <div class="url spaced-top">
-              <span class="label">Link to share</span>
-              <code id="url-share">&mdash;</code>
-              <button class="btn btn-sm" data-copy="url-share">Copy</button>
-            </div>
-
-            <p class="help" id="share-note">
-              The link carries an access key &mdash; without it the page returns
-              401, so a guessed tunnel address gets nothing.
+          <div class="card-body">
+            <p class="help spaced">
+              Only channels switched on are transcribed. Switch anyone in or out
+              during the call &mdash; nothing restarts. Click a name to change how
+              it appears on captions.
             </p>
+            <ul class="rows" id="members">
+              <li class="empty">Connect to see who&rsquo;s in the voice channel.</li>
+            </ul>
+          </div>
+        </section>
 
+        <!-- ------------------------------------------------- monitor -->
+        <section class="card card-live card-monitor">
+          <div class="card-head">
+            <h2>Monitor</h2>
+            <span class="meta" id="stats">&mdash;</span>
+          </div>
+          <div class="card-body">
+            <div class="monitor" id="preview">
+              <p class="empty">Captions appear here as people speak.</p>
+            </div>
             <p class="help spaced-top">
-              Each streamer can size the overlay for their own scene by adding
-              <code>&amp;size=42</code>, <code>&amp;hold=5</code> (seconds),
-              <code>&amp;lines=2</code>, <code>&amp;partials=0</code> or
-              <code>&amp;names=0</code> to their copy of the link. Those beat the
-              sliders above for that one browser source only.
+              What the OBS overlay is showing right now, scaled down. Captions
+              leave here when they leave the stream, so an empty box means an
+              empty overlay &mdash; it isn&rsquo;t a transcript.
             </p>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
 
-      <!-- ------------------------------------------------------ filter -->
-      <section class="card">
-        <div class="card-head">
-          <h2>Word filter</h2>
-          <span class="meta" id="filter-count">0 masked</span>
-        </div>
-        <div class="card-body">
-          <label class="check">
-            <input type="checkbox" id="filter-enabled" />
-            Mask slurs before they reach the stream
-          </label>
+      <!-- ------------------------------------------------- the rack -->
+      <div class="col col-rack">
+        <!-- -------------------------------------------------- output -->
+        <section class="card">
+          <div class="card-head">
+            <h2>Output</h2>
+          </div>
+          <div class="card-body">
+            <div class="url">
+              <span class="label">OBS browser source</span>
+              <code id="url-overlay">&mdash;</code>
+              <button class="btn btn-sm" data-copy="url-overlay">Copy</button>
+            </div>
 
-          <p class="help spaced">
-            Racial and ethnic slurs are replaced with
-            <code>*****</code> in both speech and speaker names. Whole words
-            only, so ordinary speech isn&rsquo;t mangled.
-          </p>
+            <div class="grid-3">
+              <div class="field">
+                <label class="label" for="font-size">
+                  Text size <em id="v-font">30</em>
+                </label>
+                <input type="range" id="font-size" min="14" max="64" step="1" />
+              </div>
+              <div class="field">
+                <label class="label" for="lifetime">
+                  Hold <em id="v-life">7.0s</em>
+                </label>
+                <input type="range" id="lifetime" min="2000" max="20000" step="500" />
+              </div>
+              <div class="field">
+                <label class="label" for="max-lines">
+                  Max lines <em id="v-lines">4</em>
+                </label>
+                <input type="range" id="max-lines" min="1" max="8" step="1" />
+              </div>
+            </div>
 
-          <div class="field">
-            <label class="label" for="filter-custom">Also mask these</label>
-            <textarea
-              id="filter-custom"
-              rows="3"
-              spellcheck="false"
-              placeholder="One word or phrase per line"
-            ></textarea>
-            <p class="help">
-              Saved as you type. Plurals are matched automatically.
+            <div class="checks">
+              <label class="check">
+                <input type="checkbox" id="show-partials" />
+                Live partial text
+              </label>
+              <label class="check">
+                <input type="checkbox" id="show-names" />
+                Speaker names
+              </label>
+            </div>
+
+            <div class="actions bordered">
+              <label class="label inline" for="port">Port</label>
+              <input type="number" id="port" min="1024" max="65535" class="narrow" />
+              <span class="spacer"></span>
+              <label
+                class="check"
+                title="Asks GitHub at launch whether a newer release exists. Nothing is downloaded or installed. This is the only request Chatterlayer makes on its own."
+              >
+                <input type="checkbox" id="check-updates" />
+                Check for updates
+              </label>
+              <button class="btn btn-ghost btn-sm" id="clear">Clear captions</button>
+              <button class="btn btn-ghost btn-sm" id="reveal">Show config file</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ------------------------------------------ remote overlay -->
+        <section class="card">
+          <div class="card-head">
+            <h2>Remote overlay</h2>
+            <span class="meta" id="share-meta">Off</span>
+          </div>
+          <div class="card-body">
+            <label class="check">
+              <input type="checkbox" id="share-enabled" />
+              Let other streamers use these captions
+            </label>
+
+            <p class="help spaced">
+              Opens a Cloudflare tunnel so everyone co-streaming can point OBS at
+              one link, instead of each running their own bot and speech model.
+              Nothing leaves this machine until you press Start, and the tunnel is
+              always closed again when Chatterlayer starts up.
             </p>
-          </div>
-        </div>
-      </section>
 
-      <!-- ----------------------------------------------------- monitor -->
-      <section class="card">
-        <div class="card-head">
-          <h2>Monitor</h2>
-          <span class="meta" id="stats">&mdash;</span>
-        </div>
-        <div class="card-body">
-          <div class="monitor" id="preview">
-            <p class="empty">Captions appear here as people speak.</p>
-          </div>
-        </div>
-      </section>
+            <div id="share-panel" hidden>
+              <div class="actions">
+                <button class="btn btn-primary" id="share-start">Start tunnel</button>
+                <button class="btn btn-danger" id="share-stop" disabled>Stop tunnel</button>
+                <span class="spacer"></span>
+                <button
+                  class="btn btn-ghost btn-sm"
+                  id="share-rotate"
+                  title="Mints a new access key and disconnects anyone using the old link."
+                >
+                  New access key
+                </button>
+              </div>
 
-      <!-- --------------------------------------------------------- log -->
-      <section class="card">
-        <div class="card-head">
-          <h2>Log</h2>
-          <button class="btn btn-ghost btn-sm" id="clear-log">Clear</button>
-        </div>
-        <div class="card-body">
-          <pre class="log" id="log"></pre>
-        </div>
-      </section>
+              <div class="url spaced-top">
+                <span class="label">Link to share</span>
+                <code id="url-share">&mdash;</code>
+                <button class="btn btn-sm" data-copy="url-share">Copy</button>
+              </div>
+
+              <p class="help" id="share-note">
+                The link carries an access key &mdash; without it the page returns
+                401, so a guessed tunnel address gets nothing.
+              </p>
+
+              <p class="help spaced-top">
+                Each streamer can size the overlay for their own scene by adding
+                <code>&amp;size=42</code>, <code>&amp;hold=5</code> (seconds),
+                <code>&amp;lines=2</code>, <code>&amp;partials=0</code> or
+                <code>&amp;names=0</code> to their copy of the link. Those beat the
+                sliders above for that one browser source only.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ------------------------------------------------- filter -->
+        <section class="card">
+          <div class="card-head">
+            <h2>Word filter</h2>
+            <span class="meta" id="filter-count">0 masked</span>
+          </div>
+          <div class="card-body">
+            <label class="check">
+              <input type="checkbox" id="filter-enabled" />
+              Mask slurs before they reach the stream
+            </label>
+
+            <p class="help spaced">
+              Racial and ethnic slurs are replaced with
+              <code>*****</code> in both speech and speaker names. Whole words
+              only, so ordinary speech isn&rsquo;t mangled.
+            </p>
+
+            <div class="field">
+              <label class="label" for="filter-custom">Also mask these</label>
+              <textarea
+                id="filter-custom"
+                rows="3"
+                spellcheck="false"
+                placeholder="One word or phrase per line"
+              ></textarea>
+              <p class="help">
+                Saved as you type. Plurals are matched automatically.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------------------------------------------------- log -->
+        <section class="card">
+          <div class="card-head">
+            <h2>Log</h2>
+            <button class="btn btn-ghost btn-sm" id="clear-log">Clear</button>
+          </div>
+          <div class="card-body">
+            <pre class="log" id="log"></pre>
+          </div>
+        </section>
+      </div>
     </main>
 
     <footer class="credit">

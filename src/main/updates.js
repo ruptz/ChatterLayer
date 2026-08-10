@@ -10,8 +10,13 @@
  * for every build we ship.
  *
  * This is also the only request Chatterlayer makes on its own initiative —
- * everything else is Discord and localhost — so it is throttled to once a day,
- * gives up quickly, and can be switched off in the UI.
+ * everything else is Discord and localhost — so it runs once per launch, gives
+ * up quickly, and can be switched off in the UI.
+ *
+ * It used to also sit behind a 24-hour throttle. That bought nothing: the check
+ * only ever runs at launch, so the throttle's whole effect was to tell someone
+ * who had restarted that morning they were up to date when they weren't. One
+ * request per launch of a desktop app is not a budget worth managing.
  */
 
 const https = require('https');
@@ -21,9 +26,6 @@ const OWNER_REPO = 'ruptz/Chatterlayer';
  *  we want: the release workflow publishes drafts for review first. */
 const LATEST_API = `https://api.github.com/repos/${OWNER_REPO}/releases/latest`;
 const RELEASES_PAGE = `https://github.com/${OWNER_REPO}/releases/latest`;
-
-/** Releases are rare; opening the app is not a reason to ask again. */
-const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 /** A courtesy check must never hold up a launch. */
 const TIMEOUT_MS = 6000;
@@ -57,10 +59,10 @@ function compareVersions(a, b) {
 }
 
 /** The newest published tag, or '' when the repo has no release yet. */
-function fetchLatestTag(userAgent) {
+function fetchLatestTag(userAgent, endpoint = LATEST_API) {
   return new Promise((resolve, reject) => {
     const req = https.get(
-      LATEST_API,
+      endpoint,
       {
         headers: {
           Accept: 'application/vnd.github+json',
@@ -109,11 +111,14 @@ function verdict(current, latest) {
  * @param {object} o
  * @param {string} o.currentVersion  what's running, i.e. app.getVersion()
  * @param {object} o.cache           config.data.updates
- * @param {boolean} [o.force]        skip the throttle — the user asked
+ * @param {boolean} [o.force]        ask even with the setting off — the user
+ *   pressed something, so the consent is in the gesture
+ * @param {string} [o.endpoint]      override the API URL; only the selftest
+ *   passes this, to exercise the offline path without a network
  * @returns {Promise<{state:'current'|'available'|'off'|'error', current:string,
  *   latest:string, url:string, lastCheck:number, message?:string}>}
  */
-async function checkForUpdate({ currentVersion, cache = {}, force = false }) {
+async function checkForUpdate({ currentVersion, cache = {}, force = false, endpoint }) {
   const base = { current: currentVersion, url: RELEASES_PAGE };
   const lastCheck = cache.lastCheck || 0;
   const known = cache.latest || '';
@@ -123,14 +128,8 @@ async function checkForUpdate({ currentVersion, cache = {}, force = false }) {
     return { ...base, state: 'off', latest: '', lastCheck };
   }
 
-  // Answer from the last check when it's still fresh, but re-derive the
-  // verdict — the running version may have changed since it was stored.
-  if (!force && lastCheck && Date.now() - lastCheck < CHECK_INTERVAL_MS) {
-    return { ...base, state: verdict(currentVersion, known), latest: known, lastCheck };
-  }
-
   try {
-    const latest = await fetchLatestTag(`Chatterlayer/${currentVersion}`);
+    const latest = await fetchLatestTag(`Chatterlayer/${currentVersion}`, endpoint);
     return {
       ...base,
       state: verdict(currentVersion, latest),
@@ -138,9 +137,9 @@ async function checkForUpdate({ currentVersion, cache = {}, force = false }) {
       lastCheck: Date.now(),
     };
   } catch (err) {
-    // Offline, rate-limited, or GitHub having a day. Fall back to whatever we
-    // last saw, and don't stamp the timestamp — a failed check shouldn't buy
-    // itself 24 hours of silence.
+    // Offline, rate-limited, or GitHub having a day. The remembered tag is why
+    // the cache still exists: someone who saw an update yesterday and launched
+    // on a dead connection today should still be told about it.
     const stale = verdict(currentVersion, known);
     return {
       ...base,
@@ -157,5 +156,4 @@ module.exports = {
   compareVersions,
   parseVersion,
   RELEASES_PAGE,
-  CHECK_INTERVAL_MS,
 };

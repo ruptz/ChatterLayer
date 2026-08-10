@@ -10,7 +10,16 @@
 
 const fs = require('fs');
 const path = require('path');
-const { app, BrowserWindow, ipcMain, shell, clipboard } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  shell,
+  clipboard,
+  Tray,
+  Menu,
+  nativeImage,
+} = require('electron');
 
 const { ConfigStore } = require('./config');
 const { CaptionServer, newAccessKey } = require('./server');
@@ -103,6 +112,101 @@ function send(channel, payload) {
   }
 }
 
+// ------------------------------------------------------------------ tray ---
+
+/**
+ * Chatterlayer is running for as long as the stream is, and for most of that
+ * time nobody needs to look at it. Closing the window therefore parks it in the
+ * tray rather than ending the call: pressing × on a window that is holding a
+ * Discord voice connection and serving captions to OBS should not be the way a
+ * broadcast ends. Minimise stays ordinary, and Quit is on the tray menu.
+ */
+let tray = null;
+
+/**
+ * Set by the first exit path to run, so the close handler below stands aside
+ * and lets the window actually close. Without it `app.quit()` would be caught
+ * by our own preventDefault and the app could never be quit at all.
+ */
+let allowQuit = false;
+
+/** Mirrors the tally lamp in the window, minus the detail no tooltip can hold. */
+let trayStatus = { state: 'standby', speakers: 0 };
+
+/** Told once, the first time the window vanishes into the tray. */
+let toldAboutTray = false;
+
+/**
+ * Whether × parks the app rather than ending it. Read live on every close, so
+ * changing the setting takes effect without a restart. Defaults to parking if
+ * the config somehow isn't up yet — the safe way round for a live call.
+ */
+function closeToTray() {
+  return !config || config.data.tray.closeToTray !== false;
+}
+
+function showWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return createWindow();
+  // Hidden is not minimised, so both have to be undone.
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+/** The lamp, in words: what the tooltip and the menu's first line say. */
+function statusLabel() {
+  const { state, speakers } = trayStatus;
+  if (state === 'onair') {
+    return speakers ? `On air — ${speakers} on` : 'On air — nobody switched on';
+  }
+  if (state === 'linking') return 'Connecting…';
+  if (state === 'fault') return 'Fault — open the window';
+  return 'Standby';
+}
+
+function renderTray() {
+  if (!tray) return;
+
+  const running = trayStatus.state === 'onair' || trayStatus.state === 'linking';
+  tray.setToolTip(`Chatterlayer — ${statusLabel()}`);
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: statusLabel(), enabled: false },
+      { type: 'separator' },
+      { label: 'Show Chatterlayer', click: showWindow },
+      {
+        label: 'Disconnect',
+        enabled: running,
+        click: () => {
+          if (engine) engine.stop();
+        },
+      },
+      { type: 'separator' },
+      { label: 'Quit Chatterlayer', click: () => app.quit() },
+    ])
+  );
+}
+
+function createTray() {
+  // Packaged from the asar; `build/icon.png` is listed in electron-builder's
+  // `files` for exactly this reason. A missing file yields an empty image
+  // rather than throwing, which would leave an invisible but working icon —
+  // so fall back to the window icon instead of shipping a blank tray slot.
+  const iconPath = path.join(__dirname, '..', '..', 'build', 'icon.png');
+  let image = nativeImage.createFromPath(iconPath);
+  if (!image.isEmpty()) {
+    // Windows draws the tray at 16pt; handing it a 512px PNG gets a blurry
+    // downscale. resize() picks the right one at the current DPI.
+    image = image.resize({ width: 16, height: 16 });
+  }
+
+  tray = new Tray(image);
+  // Left click is "show me", which is what people try first.
+  tray.on('click', showWindow);
+  tray.on('double-click', showWindow);
+  renderTray();
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1120,
@@ -123,6 +227,28 @@ function createWindow() {
   mainWindow.setMenuBarVisibility(false);
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   mainWindow.once('ready-to-show', () => mainWindow.show());
+
+  mainWindow.on('close', (event) => {
+    // Every real exit path sets allowQuit first; anything else is the user
+    // pressing × or Alt+F4. Whether that parks the app or ends it is the one
+    // thing the tray setting decides.
+    if (allowQuit || !closeToTray()) return;
+    event.preventDefault();
+    mainWindow.hide();
+
+    if (!toldAboutTray) {
+      toldAboutTray = true;
+      // A window that disappears with a live Discord connection still running
+      // needs to say where it went, once.
+      if (tray && process.platform === 'win32') {
+        tray.displayBalloon({
+          title: 'Chatterlayer is still running',
+          content: 'Captions keep going. Click the tray icon to bring it back, or right-click to quit.',
+        });
+      }
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -221,6 +347,9 @@ function wireEngine() {
       }
       case 'captionCleared':
         server.broadcast({ type: 'captionCleared', userId: msg.userId });
+        // The monitor mirrors the overlay, so it has to hear this too —
+        // otherwise a cancelled partial lingers in the app but not on stream.
+        send('chatterlayer:event', msg);
         return;
       case 'members': {
         // Re-derive colours across the whole call so nobody shares one.
@@ -237,6 +366,8 @@ function wireEngine() {
           customColor: Boolean(config.data.colors[m.id]),
         }));
         send('chatterlayer:members', members);
+        trayStatus.speakers = members.filter((m) => m.selected).length;
+        renderTray();
         return;
       }
       case 'auth': {
@@ -255,6 +386,18 @@ function wireEngine() {
         discord = { ...discord, guilds: msg.guilds, botTag: msg.botTag || discord.botTag };
         send('chatterlayer:event', msg);
         return;
+      case 'status': {
+        // The same four lamp states the window shows, so the tray never
+        // disagrees with the tally the user was looking at before they hid it.
+        if (msg.state === 'joined') trayStatus.state = 'onair';
+        else if (msg.state === 'error') trayStatus.state = 'fault';
+        else if (msg.state === 'stopped' || msg.state === 'disconnected') {
+          trayStatus = { state: 'standby', speakers: 0 };
+        } else trayStatus.state = 'linking';
+        renderTray();
+        send('chatterlayer:event', msg);
+        return;
+      }
       default:
         send('chatterlayer:event', msg);
     }
@@ -368,8 +511,8 @@ ipcMain.handle('chatterlayer:rotateShareToken', () => {
 
 /**
  * Ask GitHub whether a newer release exists. Notification only — nothing is
- * downloaded. `force` comes from the user switching the setting on and skips
- * the once-a-day throttle.
+ * downloaded. `force` comes from the user switching the setting on, and asks
+ * even though the stored setting may not have caught up yet.
  */
 ipcMain.handle('chatterlayer:checkUpdate', async (_e, { force = false } = {}) => {
   const result = await checkForUpdate({
@@ -552,24 +695,22 @@ ipcMain.handle('chatterlayer:revealConfig', () => shell.showItemInFolder(config.
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
-  });
+  // Launching again is how someone who forgot about the tray gets back in.
+  app.on('second-instance', showWindow);
 
   app.whenReady().then(async () => {
     resolveRuntimeDirs();
     createWindow();
+    createTray();
     await bootstrap();
 
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow();
-    });
+    app.on('activate', showWindow);
   });
 }
 
+// With close-to-tray on, the close is prevented and the window is never
+// destroyed, so this only runs on a genuine quit. With it off, the window
+// closing is the app closing, which is the behaviour restored here.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
@@ -578,6 +719,9 @@ app.on('window-all-closed', () => {
 let quitting = false;
 
 app.on('before-quit', async (event) => {
+  // First thing, ahead of every early return: from here on the window is
+  // allowed to close for real rather than being sent back to the tray.
+  allowQuit = true;
   if (quitting) return;
   const needsTeardown = (engine && engine.child) || (tunnel && tunnel.running);
   if (!needsTeardown) return;

@@ -60,6 +60,9 @@ const el = {
   build: $('build'),
   buildVersion: $('build-version'),
   checkUpdates: $('check-updates'),
+  settingsToggle: $('settings-toggle'),
+  settingsPanel: $('settings-panel'),
+  closeToTray: $('close-to-tray'),
   vFont: $('v-font'),
   vLife: $('v-life'),
   vLines: $('v-lines'),
@@ -315,11 +318,13 @@ function renderMembers() {
       : 'Connect to see who’s in the voice channel.';
     el.members.appendChild(li);
     el.speakerCount.textContent = '0 on';
+    el.speakerCount.dataset.on = '0';
     return;
   }
 
   const live = state.members.filter((m) => m.selected).length;
   el.speakerCount.textContent = `${live} on`;
+  el.speakerCount.dataset.on = live ? '1' : '0';
   // Toggling someone on can push the selection past what the model keeps up
   // with, which the model note is where we say so.
   updateModelNote();
@@ -431,15 +436,51 @@ async function toggleMember(userId, on) {
 
 // -------------------------------------------------------------- monitor --
 
+/**
+ * The monitor is a mirror of the overlay, not a log of the call. Captions
+ * expire on the same Hold timer and trim to the same Max lines, so what's in
+ * the box is what's on the stream at that moment — and a twelve-hour session
+ * costs the same handful of nodes as a two-minute one.
+ *
+ * The lifecycle below is deliberately identical to the one in web/overlay.html.
+ * Change one and you must change the other: they are two renderers of the same
+ * rules, kept apart only because the overlay is a standalone page served to OBS
+ * and can't share a module with the app.
+ */
+
+/** Trim to Max lines, oldest first. The overlay's `trim()`. */
+function trimMonitor() {
+  const max = Number(el.maxLines.value) || 4;
+  while (el.preview.children.length > max) el.preview.firstChild.remove();
+}
+
+/** Fade a line out, then drop it. The overlay's `expire()`. */
+function expireLine(node, delay) {
+  const timer = setTimeout(() => {
+    node.classList.add('leaving');
+    setTimeout(() => node.remove(), 500);
+  }, delay);
+  node.dataset.timer = String(timer);
+}
+
+function clearLineTimer(node) {
+  if (node.dataset.timer) clearTimeout(Number(node.dataset.timer));
+}
+
 function buildLine(cap, isPartial) {
   const div = document.createElement('div');
   div.className = `line${isPartial ? ' partial' : ''}`;
   div.style.setProperty('--ch', cap.color);
-  const who = document.createElement('b');
-  who.textContent = cap.username;
+  // Decided at build time, exactly as the overlay decides it. Turning names off
+  // mid-call leaves the lines already on screen alone; they age out in seconds.
+  if (el.showNames.checked) {
+    const who = document.createElement('b');
+    who.textContent = cap.username;
+    div.appendChild(who);
+  }
   const text = document.createElement('span');
   text.textContent = cap.text;
-  div.append(who, text);
+  div.appendChild(text);
   return div;
 }
 
@@ -447,24 +488,59 @@ function addCaption(cap) {
   const empty = el.preview.querySelector('.empty');
   if (empty) empty.remove();
 
+  // The channel strip blips whenever someone is heard, whether or not their
+  // partial text is being shown.
   blip(cap.userId);
 
+  const lifetime = Number(el.lifetime.value);
+
   if (!cap.isFinal) {
-    // A partial replaces that speaker's previous partial in place.
-    const fresh = buildLine(cap, true);
-    const existing = partials.get(cap.userId);
-    if (existing && existing.isConnected) existing.replaceWith(fresh);
-    else el.preview.appendChild(fresh);
-    partials.set(cap.userId, fresh);
-  } else {
-    const existing = partials.get(cap.userId);
-    if (existing && existing.isConnected) existing.remove();
-    partials.delete(cap.userId);
-    el.preview.appendChild(buildLine(cap, false));
+    // Dropped at source rather than hidden with CSS: a partial nobody can see
+    // must not occupy one of the Max lines slots either.
+    if (!el.showPartials.checked) return;
+
+    let node = partials.get(cap.userId);
+    if (node && node.isConnected) {
+      clearLineTimer(node);
+      node.replaceWith((node = buildLine(cap, true)));
+    } else {
+      node = buildLine(cap, true);
+      el.preview.appendChild(node);
+    }
+    partials.set(cap.userId, node);
+    // Safety net, as on the overlay: if a speaker stops mid-word their partial
+    // must not sit there for the rest of the stream.
+    expireLine(node, lifetime + 4000);
+    trimMonitor();
+    return;
   }
 
-  while (el.preview.children.length > 40) el.preview.firstChild.remove();
+  // Final text supersedes that speaker's partial line.
+  const existing = partials.get(cap.userId);
+  if (existing && existing.isConnected) {
+    clearLineTimer(existing);
+    existing.remove();
+  }
+  partials.delete(cap.userId);
+
+  const node = buildLine(cap, false);
+  el.preview.appendChild(node);
+  expireLine(node, lifetime);
+  trimMonitor();
+  // Eight lines at the largest text can outgrow the stage. OBS would clip the
+  // same overflow off the top of its own frame; here the newest line is the one
+  // worth keeping in view.
   el.preview.scrollTop = el.preview.scrollHeight;
+}
+
+/** A cancelled partial leaves the monitor at once, as it leaves the overlay. */
+function dropPartial(userId) {
+  const node = partials.get(userId);
+  if (node && node.isConnected) {
+    clearLineTimer(node);
+    node.remove();
+  }
+  partials.delete(userId);
 }
 
 // --------------------------------------------------------------- events --
@@ -580,6 +656,10 @@ function handleEvent(msg) {
       if (bits.length) el.stats.textContent = bits.join(' · ');
       return;
     }
+
+    case 'captionCleared':
+      dropPartial(msg.userId);
+      return;
 
     case 'filter':
       el.filterCount.textContent = `${msg.masked} masked`;
@@ -854,6 +934,18 @@ function syncFaderLabels() {
   el.vFont.textContent = el.fontSize.value;
   el.vLife.textContent = `${(Number(el.lifetime.value) / 1000).toFixed(1)}s`;
   el.vLines.textContent = el.maxLines.value;
+
+  // The monitor stands in for the overlay, so every control that shapes the
+  // overlay has to shape it too. Size is scaled rather than mirrored: 30px on a
+  // 1920px scene is a different thing from 30px in a 600px panel, so the range
+  // is compressed to keep the small end readable and the big end in the box.
+  el.preview.style.setProperty(
+    '--preview-size',
+    `${(9 + Number(el.fontSize.value) * 0.3).toFixed(1)}px`
+  );
+  // The overlay re-trims whenever settings arrive, so lowering Max lines takes
+  // effect on what's already showing rather than only on the next caption.
+  trimMonitor();
 }
 
 // --------------------------------------------------------------- version --
@@ -992,6 +1084,7 @@ async function init() {
   el.filterEnabled.checked = c.filter.enabled;
   el.filterCustom.value = (c.filter.custom || []).join('\n');
   el.checkUpdates.checked = c.updates.check;
+  el.closeToTray.checked = c.tray.closeToTray;
   syncFaderLabels();
 
   if (state.urls && state.urls.overlay) el.urlOverlay.textContent = state.urls.overlay;
@@ -1005,7 +1098,7 @@ async function init() {
   log(`Chatterlayer v${state.version} ready.`);
 
   // Deliberately not awaited: the window is usable before GitHub answers, and
-  // it's throttled to one real request a day inside the main process.
+  // the request gives up after six seconds either way.
   refreshUpdate();
 }
 
@@ -1054,8 +1147,12 @@ for (const input of [el.fontSize, el.lifetime, el.maxLines]) {
     saveOverlay();
   });
 }
-el.showPartials.addEventListener('change', saveOverlay);
-el.showNames.addEventListener('change', saveOverlay);
+for (const box of [el.showPartials, el.showNames]) {
+  box.addEventListener('change', () => {
+    syncFaderLabels();
+    saveOverlay();
+  });
+}
 el.port.addEventListener('input', savePort);
 el.filterEnabled.addEventListener('change', () => {
   saveFilter();
@@ -1174,6 +1271,44 @@ el.shareRotate.addEventListener('click', async () => {
   } catch (err) {
     log(err.message, 'error');
   }
+});
+
+// --------------------------------------------------------- app settings --
+
+function openSettings(open) {
+  el.settingsPanel.hidden = !open;
+  el.settingsToggle.setAttribute('aria-expanded', String(open));
+}
+
+el.settingsToggle.addEventListener('click', (e) => {
+  e.stopPropagation();
+  openSettings(el.settingsPanel.hidden);
+});
+
+// Click anywhere else, or press Escape, and it goes away — a panel this small
+// doesn't deserve a close button.
+document.addEventListener('click', (e) => {
+  if (el.settingsPanel.hidden) return;
+  if (!el.settingsPanel.contains(e.target)) openSettings(false);
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !el.settingsPanel.hidden) {
+    openSettings(false);
+    el.settingsToggle.focus();
+  }
+});
+
+el.closeToTray.addEventListener('change', async () => {
+  const on = el.closeToTray.checked;
+  state.config = await window.chatterlayer.updateConfig({
+    tray: { ...state.config.tray, closeToTray: on },
+  });
+  log(
+    on
+      ? 'Closing the window will keep Chatterlayer running in the tray.'
+      : 'Closing the window will now quit Chatterlayer and end the call.'
+  );
 });
 
 el.reveal.addEventListener('click', () => window.chatterlayer.revealConfig());

@@ -992,7 +992,7 @@ test('workflows do not pin a deprecated Node version', () => {
 
 // --- version check -------------------------------------------------------
 
-const { compareVersions, checkForUpdate, CHECK_INTERVAL_MS } = require('../src/main/updates');
+const { compareVersions, checkForUpdate } = require('../src/main/updates');
 
 console.log('\nversion check');
 
@@ -1053,27 +1053,40 @@ testAsync('switching the check off makes no request at all', async () => {
   assert.ok(result.url.startsWith('https://github.com/'), result.url);
 });
 
-testAsync('a recent check is answered from cache, not from GitHub', async () => {
+testAsync('an unreachable GitHub still reports the tag we last saw', async () => {
+  // The cache is no longer a throttle — it exists for this case alone. Point
+  // the check at a host that cannot answer and the remembered update survives.
   const result = await checkForUpdate({
     currentVersion: '1.0.0',
     cache: { check: true, lastCheck: Date.now() - 60_000, latest: 'v1.1.0' },
+    endpoint: 'https://127.0.0.1:1/nothing-here',
   });
   assert.strictEqual(result.state, 'available');
   assert.strictEqual(result.latest, 'v1.1.0');
 });
 
 testAsync('a cached tag the user has since installed stops being an update', async () => {
-  // The verdict is re-derived on read, so installing 1.1.0 clears the badge
-  // without waiting for the next check to come round.
+  // The verdict is re-derived from the running version, so installing 1.1.0
+  // clears the badge even on a launch that can't reach GitHub to confirm it.
   const result = await checkForUpdate({
     currentVersion: '1.1.0',
     cache: { check: true, lastCheck: Date.now() - 60_000, latest: 'v1.1.0' },
+    endpoint: 'https://127.0.0.1:1/nothing-here',
   });
-  assert.strictEqual(result.state, 'current');
+  assert.notStrictEqual(result.state, 'available');
 });
 
-test('the check interval is a day, not a launch', () => {
-  assert.strictEqual(CHECK_INTERVAL_MS, 24 * 60 * 60 * 1000);
+testAsync('a check made minutes ago does not silence the next launch', async () => {
+  // Regression guard for dropping the 24-hour throttle. A fresh lastCheck used
+  // to short-circuit to a cached verdict without asking; now the request goes
+  // out regardless, so an unreachable endpoint surfaces as an error rather
+  // than a confident "you're up to date".
+  const result = await checkForUpdate({
+    currentVersion: '1.0.0',
+    cache: { check: true, lastCheck: Date.now() - 60_000, latest: '' },
+    endpoint: 'https://127.0.0.1:1/nothing-here',
+  });
+  assert.strictEqual(result.state, 'error');
 });
 
 // --- remote sharing ------------------------------------------------------

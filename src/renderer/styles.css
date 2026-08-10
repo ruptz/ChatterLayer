@@ -191,6 +191,76 @@ body {
   display: block;
 }
 
+/* --- app settings: invisible chrome until pointed at, like the build stamp
+   beside it. One panel for the handful of things that are about the app rather
+   than about the captions. ------------------------------------------------- */
+
+.settings {
+  position: relative;
+  display: flex;
+}
+
+.cog {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: color 0.15s var(--ease), background 0.15s var(--ease),
+    border-color 0.15s var(--ease);
+}
+
+.cog:hover,
+.cog[aria-expanded="true"] {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--raised);
+}
+
+.cog:focus-visible {
+  outline: none;
+  color: var(--text);
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.12);
+}
+
+.settings-panel {
+  position: absolute;
+  top: calc(100% + 9px);
+  right: 0;
+  z-index: 30;
+  width: 310px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 15px 16px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+/* Outranks the flex display above, which would otherwise keep it on screen. */
+.settings-panel[hidden] {
+  display: none;
+}
+
+.settings-panel h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
 /* --- status pill: the tally, minimised to a dot and a word --------------- */
 
 .status {
@@ -251,10 +321,14 @@ body {
 
 /* ----------------------------------------------------------------- main --- */
 
+/* Source spans the top like a patch bay; below it the live strips and monitor
+   sit left, and everything you set once racks up on the right. Narrow windows
+   collapse to one column in DOM order, which is already the right order:
+   source, who's on, what's going out, then the settings. */
 main {
   flex: 1;
   width: 100%;
-  max-width: 880px;
+  max-width: 1300px;
   margin: 0 auto;
   padding: 28px 24px 40px;
   display: flex;
@@ -262,11 +336,71 @@ main {
   gap: 20px;
 }
 
+.col {
+  display: contents;
+}
+
+/* 1040px, not 1100+: the default 1120px window has to land in two columns or
+   the split does nothing for most users. At 150% Windows scaling that same
+   window is ~747 CSS px and correctly falls back to one — see .grid-fields. */
+@media (min-width: 1040px) {
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1.18fr) minmax(0, 0.82fr);
+    align-items: stretch;
+    column-gap: 20px;
+  }
+
+  .card-source {
+    grid-column: 1 / -1;
+  }
+
+  .col {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+  }
+
+  /* The rack is as tall as its contents; the desk stretches to match it and the
+     monitor absorbs the slack. Dead space under the monitor becomes scrollback,
+     and the pane still can't reflow as captions arrive because its height comes
+     from the grid row rather than from its own content. */
+  .col-rack {
+    align-self: start;
+  }
+
+  .card-monitor,
+  .card-monitor .card-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .card-monitor .monitor {
+    flex: 1;
+    height: auto;
+    min-height: 180px;
+  }
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   overflow: hidden;
+}
+
+/* Weight follows use. The rack is set once and then ignored, so it sits back;
+   the strips and the monitor are watched for hours and come forward. */
+.col-rack .card {
+  background: var(--surface-2);
+}
+
+.card-live {
+  background: #14171b;
+  border-color: var(--border-strong);
 }
 
 .card-head {
@@ -287,6 +421,12 @@ main {
   letter-spacing: -0.006em;
 }
 
+/* Lit while anyone is actually being captioned — the same "switched on, passing
+   audio" green the strips use. */
+.card-head .meta[data-on="1"] {
+  color: var(--live);
+}
+
 .card-head .meta {
   font-size: 12px;
   color: var(--text-3);
@@ -301,19 +441,34 @@ main {
   padding: 20px;
 }
 
-/* Intrinsic sizing rather than width breakpoints: Windows DPI scaling means a
-   1120px window is only ~747 CSS px at 150%, which would collapse a hard
-   760px breakpoint and ship the app in its narrow layout by default. */
-.grid-2 {
+/* The four patch-bay fields. Stepped 1 → 2 → 4 rather than auto-fit, because
+   auto-fit also produces 3, which leaves one field stranded on its own row.
+   Windows DPI scaling means a 1120px window is only ~747 CSS px at 150%, so
+   the steps are set where that lands honestly in the 2-up layout. */
+.grid-fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(272px, 1fr));
+  grid-template-columns: 1fr;
   gap: 18px;
 }
 
+@media (min-width: 620px) {
+  .grid-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 1180px) {
+  .grid-fields {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* Three faders stay three across even in the rack column — they're read as a
+   set, and a 2 + 1 wrap reads as one of them being different. */
 .grid-3 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
   margin-top: 20px;
 }
 
@@ -435,9 +590,9 @@ textarea:focus-visible {
   color: var(--text-2);
 }
 
-.model-field,
-.channel-field {
-  margin-top: 18px;
+/* The linky is baseline-aligned against 38px buttons, so it needs centring. */
+.source-foot .linky {
+  align-self: center;
 }
 
 /* --- channel picker ------------------------------------------------------ */
@@ -526,10 +681,149 @@ select:disabled {
   cursor: not-allowed;
 }
 
-/* The native dark popup is jarring against the panel; match it. */
+/* Fallback for engines without a customisable select: the OS draws the popup
+   and this is as close as it can be brought to the panel. */
 select option {
   background: var(--surface);
   color: var(--text);
+}
+
+/* --- the open menu -------------------------------------------------------
+   Until Chromium's customisable <select> the popup was an OS widget, which is
+   why these read as vanilla HTML however carefully the closed control was
+   styled. `appearance: base-select` hands the list back to us as real DOM.
+
+   Guarded, so an older engine keeps a working native popup rather than losing
+   the control entirely — this is the one piece of the UI where failing to
+   render means you cannot pick a channel at all. */
+@supports (appearance: base-select) {
+  select,
+  ::picker(select) {
+    appearance: base-select;
+  }
+
+  select {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+  }
+
+  /* Long channel and model names truncate rather than shoving the arrow out. */
+  select selectedcontent {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The UA default is a filled triangle, which is the one part of the control
+     that still looked stock. Replaced with a hairline chevron drawn from two
+     borders, matching the weight of everything else on the panel. */
+  select::picker-icon {
+    content: '';
+    flex: none;
+    width: 6px;
+    height: 6px;
+    margin-right: 3px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    border-radius: 1px;
+    color: var(--text-3);
+    /* The square is rotated, so its visual centre sits low without this. */
+    margin-top: -3px;
+    transform: rotate(45deg);
+    transition: transform 0.2s var(--ease), color 0.18s var(--ease);
+  }
+
+  select:hover::picker-icon {
+    color: var(--text-2);
+  }
+
+  select:open::picker-icon {
+    margin-top: 2px;
+    transform: rotate(-135deg);
+    color: var(--text-2);
+  }
+
+  ::picker(select) {
+    /* Track the control's width instead of shrinking to the longest label. */
+    min-width: anchor-size(width);
+    max-height: 320px;
+    margin-block-start: 6px;
+    padding: 5px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+    overflow-y: auto;
+  }
+
+  ::picker(select):popover-open {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Discrete transitions so the menu can fade rather than snap. Both the
+     closed state and @starting-style are needed: one for leaving, one for
+     entering. */
+  ::picker(select) {
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.14s var(--ease), transform 0.14s var(--ease),
+      display 0.14s allow-discrete, overlay 0.14s allow-discrete;
+  }
+
+  @starting-style {
+    ::picker(select):popover-open {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+  }
+
+  option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--text-2);
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  option:hover,
+  option:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text);
+  }
+
+  option:checked {
+    color: var(--text);
+  }
+
+  /* Channels the bot can't join stay listed but unpickable — hiding them turns
+     a permissions mistake into a channel that mysteriously doesn't exist. */
+  option:disabled {
+    color: var(--text-3);
+    cursor: not-allowed;
+  }
+
+  option:disabled:hover {
+    background: transparent;
+    color: var(--text-3);
+  }
+
+  /* The tick moves to the trailing edge and takes the "switched on" green, so
+     the menu speaks the same colour language as the channel strips. */
+  option::checkmark {
+    order: 1;
+    margin-left: auto;
+    color: var(--live);
+  }
 }
 
 /* --- speech model catalogue --------------------------------------------- */
@@ -734,13 +1028,17 @@ select option {
 
 /* ------------------------------------------------------- channel rows --- */
 
+/* Capped rather than unbounded: a twenty-person call would otherwise push the
+   monitor off the bottom of the window, which is the one thing this layout
+   exists to prevent. */
 .rows {
   list-style: none;
   margin: 0;
   padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--r-md);
-  overflow: hidden;
+  max-height: 336px;
+  overflow-y: auto;
 }
 
 .row {
@@ -761,8 +1059,12 @@ select option {
   background: rgba(255, 255, 255, 0.018);
 }
 
+/* A lit strip carries its speaker's colour down its own edge. The app's whole
+   output is colour-coded speech, so the colour belongs in the chrome of the
+   thing that's live — not only in an 8px dot. */
 .row.live {
   background: rgba(255, 255, 255, 0.026);
+  box-shadow: inset 3px 0 0 var(--ch);
 }
 
 /* Speaker indicator. The halo ring is the whole treatment — no glow stack. */
@@ -1042,42 +1344,89 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
 
 /* ------------------------------------------------------------ monitor --- */
 
-/* Fixed height, not min/max: a growing pane reflows the document as captions
+/* This is a preview, not a log — it renders captions the way the OBS overlay
+   renders them, scaled down. Anything the sliders in Output change, they change
+   here too, so nobody has to alt-tab to OBS to see what a number does.
+
+   Fixed height, not min/max: a growing pane reflows the document as captions
    arrive, and Chromium's scroll anchoring then shifts the page under your
    cursor mid-stream. Worth the empty space when idle. */
 .monitor {
-  height: 196px;
+  --preview-size: 18px;
+  height: 236px;
   overflow-y: auto;
   overflow-anchor: none;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  /* The alpha checker says what OBS actually receives: a transparent frame with
+     nothing behind it but the scene underneath. */
+  background: repeating-conic-gradient(
+        rgba(255, 255, 255, 0.022) 0% 25%,
+        transparent 0% 50%
+      )
+      0 0 / 20px 20px,
+    var(--surface-2);
+}
+
+/* Newest sits at the bottom as it does on stream. margin-top on the first item
+   rather than justify-content: flex-end, which makes overflow above the top
+   unreachable in Chromium. */
+.line:first-child {
+  margin-top: auto;
 }
 
 .line {
   /* Fallback lives here, not on `.line b` — a declaration on the child would
      beat the inline `--ch` the renderer sets on this element. */
   --ch: var(--text-2);
+  flex: none;
+  max-width: 94%;
   display: flex;
-  gap: 10px;
+  gap: 9px;
   align-items: baseline;
-  padding: 9px 2px;
-  border-bottom: 1px solid var(--border);
-  font-size: 13.5px;
-}
-
-.line:last-child {
-  border-bottom: none;
-}
-
-.line.partial {
-  color: var(--text-2);
+  padding: 6px 11px;
+  border-radius: 8px;
+  border-left: 4px solid var(--ch);
+  background: rgba(8, 10, 14, 0.72);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font-size: var(--preview-size);
+  line-height: 1.32;
+  /* 0.45s against the 500ms removal in renderer.js, as on the overlay. */
+  transition: opacity 0.45s ease, transform 0.45s ease;
 }
 
 .line b {
   flex: none;
   color: var(--ch);
-  font-size: 12.5px;
-  font-weight: 600;
+  font-weight: 700;
+}
+
+.line.partial {
+  opacity: 0.75;
+}
+
+/* Arriving and leaving, both lifted from the overlay so a caption behaves here
+   the way it behaves on stream. */
+.line {
+  animation: rise 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.line.leaving {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
 }
 
 .empty {
