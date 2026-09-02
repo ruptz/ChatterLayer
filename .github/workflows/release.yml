@@ -120,6 +120,9 @@ jobs:
     name: Publish release
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release and upload assets
+      id-token: write # cosign keyless signing via GitHub OIDC
     # Only run when there is an actual tag to release. On a tag push that's
     # github.ref_name; on a manual run it's whatever was typed in.
     if: github.ref_type == 'tag' || inputs.tag
@@ -146,6 +149,31 @@ jobs:
 
       - name: List what will be published
         run: ls -lah artifacts
+
+      # The builds are unsigned, so give people a way to check a download is the
+      # real one: a checksum file, signed keylessly with Sigstore (GitHub OIDC,
+      # no key to manage). Verify with:
+      #   cosign verify-blob --bundle SHA256SUMS.cosign.bundle \
+      #     --certificate-identity-regexp 'https://github.com/ruptz/ChatterLayer/.+' \
+      #     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+      #     SHA256SUMS
+      #   sha256sum -c SHA256SUMS
+      - name: Generate SHA256SUMS
+        working-directory: artifacts
+        run: |
+          find . -maxdepth 1 -type f \
+            \( -name '*.exe' -o -name '*.dmg' -o -name '*.AppImage' -o -name '*.deb' \) \
+            -printf '%P\n' | sort | xargs -r sha256sum | tee SHA256SUMS
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign SHA256SUMS (keyless)
+        working-directory: artifacts
+        run: |
+          cosign sign-blob --yes \
+            --bundle SHA256SUMS.cosign.bundle \
+            SHA256SUMS
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
