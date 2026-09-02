@@ -214,25 +214,34 @@ jobs:
             You'll also need a Discord bot token — about two minutes to set up,
             no privileged intents required. See the README.
 
-            ### These builds are unsigned
+            ### About the "unknown developer" warnings
 
-            Code signing certificates cost money, so the binaries aren't signed.
-            What that means per platform:
+            ChatterLayer is free and unfunded, and code-signing certificates
+            cost money each year, so these builds aren't signed. Your OS will
+            say so on first launch. The app is the same one built by this repo's
+            CI — here's what you'll see and how to get past it:
 
-            - **Windows** — SmartScreen warns on first launch. Choose
-              *More info* → *Run anyway*.
-            - **macOS** — Gatekeeper will refuse to open it, often reporting the
-              app as "damaged". It isn't. Either right-click the app →
-              *Open* → *Open*, or clear the quarantine flag:
-              ```
-              xattr -cr /Applications/ChatterLayer.app
-              ```
+            - **Windows** — SmartScreen shows a blue box. Choose *More info* →
+              *Run anyway*. (It stops warning once enough people have
+              downloaded a given release.)
+            - **macOS** — Gatekeeper may say the app is "damaged". It isn't —
+              that's the quarantine flag on an unsigned app. **ChatterLayer
+              clears it for you:** open it once (right-click → *Open* → *Open*),
+              and it offers a one-click fix so every launch after is normal. Or
+              run `xattr -dr com.apple.quarantine /Applications/ChatterLayer.app`
+              yourself.
             - **Linux** — mark the AppImage executable first:
-              ```
-              chmod +x ChatterLayer-*.AppImage
-              ```
+              `chmod +x ChatterLayer-*.AppImage`.
 
-            If you'd rather not run unsigned binaries, build from source — it's
-            four commands, see the README.
+            **Verify your download.** Every release ships `SHA256SUMS` (signed
+            with Sigstore) and each installer carries build provenance:
+
+            ```
+            sha256sum -c SHA256SUMS
+            gh attestation verify ChatterLayer-*-Setup.exe --repo ruptz/ChatterLayer
+            ```
+
+            Or skip the binaries entirely and build from source — four commands,
+            see the README.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

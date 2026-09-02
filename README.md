@@ -81,13 +81,19 @@ Grab the latest build from the
 [Releases page](https://github.com/ruptz/ChatterLayer/releases). There's a normal
 installer and a portable version if you'd rather not install anything.
 
-> **Windows will warn you on first launch.** The builds aren't code-signed (that
-> costs money we're not spending), so SmartScreen shows a blue box. Click
-> *More info* → *Run anyway*.
+> **Your OS will warn you on first launch.** The builds aren't code-signed —
+> certificates cost money this project isn't spending — so:
 >
-> **On macOS** it's a bit worse — Gatekeeper may claim the app is "damaged". It
-> isn't. Right-click the app → *Open*, or run
-> `xattr -cr /Applications/ChatterLayer.app` in Terminal.
+> - **Windows:** SmartScreen shows a blue box. Click *More info* → *Run anyway*.
+>   It stops once a release has enough downloads.
+> - **macOS:** Gatekeeper may say the app is "damaged". It isn't. Right-click →
+>   *Open* → *Open* once; ChatterLayer then offers a **one-click fix** so later
+>   launches are normal. (Manual version:
+>   `xattr -dr com.apple.quarantine /Applications/ChatterLayer.app`.)
+>
+> Every release includes a Sigstore-signed `SHA256SUMS` and per-file build
+> provenance if you want to verify the download — see
+> [Code signing](#code-signing).
 
 ### 2. Pick a speech model
 
@@ -1093,19 +1099,35 @@ the one the user picks on first run.
 
 ### Code signing
 
-The builds are **unsigned**, which is fine but has consequences worth knowing
-before you announce anything:
+The builds are **unsigned** — certificates are a recurring cost this project
+isn't taking on. What that means, and what's done about it instead:
 
 - **Windows** — SmartScreen warns on first launch (*More info* → *Run anyway*).
-  Annoying, but users get through it. To sign, add `CSC_LINK` and
-  `CSC_KEY_PASSWORD` as repository secrets; `release.yml` already passes them
-  through.
-- **macOS** — considerably worse. Gatekeeper refuses to open unsigned apps and
-  often claims the app is "damaged". Users must right-click → *Open*, or run
-  `xattr -cr /Applications/ChatterLayer.app`. Fixing this properly needs an Apple
-  Developer account ($99/yr) plus notarisation. The release notes explain the
-  workaround.
+  Reputation builds up per release as downloads accumulate. To sign anyway, add
+  `CSC_LINK` and `CSC_KEY_PASSWORD` as repository secrets; `release.yml` already
+  passes them through.
+- **macOS** — Gatekeeper stamps the download with `com.apple.quarantine` and may
+  call it "damaged". On first launch the app detects this and offers to run
+  `xattr -dr com.apple.quarantine` on itself and relaunch (see
+  `src/main/macos-quarantine.js`), so only the very first open needs the
+  right-click → *Open* dance. A proper fix still needs an Apple Developer
+  account ($99/yr) plus notarisation.
 - **Linux** — no signing expectations; users just `chmod +x` the AppImage.
+
+**Verification, in place of signatures.** Every release carries a `SHA256SUMS`
+file signed with [Sigstore](https://www.sigstore.dev/) cosign (keyless, via the
+CI's GitHub OIDC identity — no key or certificate), and every installer has a
+[build provenance attestation](https://docs.github.com/actions/security-guides/using-artifact-attestations).
+A user can check both:
+
+```bash
+sha256sum -c SHA256SUMS
+cosign verify-blob --bundle SHA256SUMS.cosign.bundle \
+  --certificate-identity-regexp 'https://github.com/ruptz/ChatterLayer/.+' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  SHA256SUMS
+gh attestation verify ChatterLayer-*-Setup.exe --repo ruptz/ChatterLayer
+```
 
 ### Local builds
 
