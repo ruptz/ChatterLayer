@@ -14,6 +14,7 @@ const {
   app,
   BrowserWindow,
   ipcMain,
+  dialog,
   shell,
   clipboard,
   Tray,
@@ -22,6 +23,7 @@ const {
 } = require('electron');
 
 const { ConfigStore } = require('./config');
+const { maybeClearQuarantine } = require('./macos-quarantine');
 const { CaptionServer, newAccessKey } = require('./server');
 const { Tunnel } = require('./tunnel');
 const { EngineHost } = require('./engine-host');
@@ -721,6 +723,9 @@ if (!app.requestSingleInstanceLock()) {
   app.on('second-instance', showWindow);
 
   app.whenReady().then(async () => {
+    // Unsigned build: offer to clear macOS's quarantine flag before anything
+    // else, since accepting relaunches the app.
+    await maybeClearQuarantine({ app, dialog, clipboard });
     resolveRuntimeDirs();
     createWindow();
     createTray();
