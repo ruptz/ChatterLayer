@@ -41,7 +41,7 @@ const DEFAULTS = {
   /** Optional explicit path to a Vosk model folder; empty = autodetect. */
   modelPath: '',
   /**
-   * The version check. Chatterlayer otherwise talks to nothing but Discord and
+   * The version check. ChatterLayer otherwise talks to nothing but Discord and
    * this machine, so asking GitHub whether a newer build exists is a visible
    * setting rather than a hidden one. Nothing is ever downloaded — see
    * `updates.js`.

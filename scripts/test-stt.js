@@ -201,7 +201,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log('Chatterlayer speech engine test');
+  console.log('ChatterLayer speech engine test');
   console.log('===============================');
   console.log(`wav     : ${wavPath} (${(wav.data.length / 2 / 16000).toFixed(2)}s)`);
   console.log(`node    : ${process.version}  ${process.platform}-${process.arch}  ` +

@@ -7,7 +7,7 @@
  * Three things are deliberate here:
  *
  *   - Nothing starts on its own. The tunnel is spawned only by an explicit
- *     Start, never on launch, never as a side effect of the toggle. Chatterlayer
+ *     Start, never on launch, never as a side effect of the toggle. ChatterLayer
  *     is offline-by-default software and turning that inside out silently would
  *     be a betrayal of the reason people install it.
  *   - The binary is fetched on demand, not bundled. It is ~35 MB and most users
@@ -107,7 +107,7 @@ class Tunnel extends EventEmitter {
     return Boolean(this.child) || this.starting;
   }
 
-  /** Where a Chatterlayer-managed cloudflared lives. */
+  /** Where a ChatterLayer-managed cloudflared lives. */
   managedPath() {
     return path.join(this.binDir, process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared');
   }

@@ -2,9 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Chatterlayer Overlay</title>
+    <title>ChatterLayer Overlay</title>
     <style>
-      /* Chatterlayer - OBS browser source overlay
+      /* ChatterLayer - OBS browser source overlay
          Background MUST stay fully transparent so OBS composites it over the
          scene. Never set an opaque background on html/body. */
 
@@ -102,7 +102,7 @@
   </head>
   <body>
     <div id="stage"></div>
-    <div id="offline">Chatterlayer: connecting…</div>
+    <div id="offline">ChatterLayer: connecting…</div>
 
     <script>
       (() => {
@@ -275,7 +275,7 @@
           if (location.protocol !== 'https:' && !isLocalHost()) {
             offline.classList.remove('hide');
             offline.textContent =
-              'Chatterlayer: refusing to send the access key over an insecure connection — use the https:// link.';
+              'ChatterLayer: refusing to send the access key over an insecure connection — use the https:// link.';
             return;
           }
 
@@ -332,11 +332,11 @@
             // worse than saying what happened.
             if (event.code === 4401) {
               offline.textContent =
-                'Chatterlayer: this link’s access key was revoked — ask the host for a new one.';
+                'ChatterLayer: this link’s access key was revoked — ask the host for a new one.';
               return;
             }
 
-            offline.textContent = 'Chatterlayer: reconnecting…';
+            offline.textContent = 'ChatterLayer: reconnecting…';
             // Back off gently, but keep retrying forever — OBS sources are
             // often loaded before the app is running.
             retry = Math.min(retry + 1, 10);

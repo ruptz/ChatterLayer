@@ -23,7 +23,7 @@ function runtime() {
   } catch (err) {
     throw new Error(
       'This speech model runs on the ONNX Runtime, which failed to load ' +
-        `(${err.message}). Reinstall Chatterlayer, or from a source checkout run ` +
+        `(${err.message}). Reinstall ChatterLayer, or from a source checkout run ` +
         '"npm install".'
     );
   }
@@ -34,7 +34,7 @@ function runtime() {
 /**
  * How many threads a single inference may use.
  *
- * Chatterlayer shares the machine with a game, Discord and OBS, so taking every
+ * ChatterLayer shares the machine with a game, Discord and OBS, so taking every
  * core would be the wrong trade even though it would decode fastest. Half the
  * cores, capped at 8, leaves the box usable; decodes are queued rather than run
  * in parallel (see InferenceQueue), so each one gets this budget to itself.
@@ -121,7 +121,7 @@ function pickName(available, candidates, what) {
     if (available.includes(c)) return c;
   }
   throw new Error(
-    `This model's ${what} is not one of the names Chatterlayer knows ` +
+    `This model's ${what} is not one of the names ChatterLayer knows ` +
       `(${candidates.join(', ')}). The graph offers: ${available.join(', ')}.`
   );
 }

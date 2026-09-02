@@ -1,4 +1,4 @@
-# Chatterlayer
+# ChatterLayer
 
 Live, colour-coded captions for your Discord voice call, rendered straight into
 OBS.
@@ -9,7 +9,7 @@ muted at work, or on a connection that's chewing up your audio.
 
 **Free, forever, for everyone.** No paid tiers, no licence keys, no accounts, no
 API keys, no per-minute billing. The speech recognition runs on your own PC. After
-the one-time model download, Chatterlayer never sends anyone's audio anywhere —
+the one-time model download, ChatterLayer never sends anyone's audio anywhere —
 it doesn't even need an internet connection to caption.
 
 ---
@@ -75,10 +75,10 @@ API, or an account with anyone.
 
 About ten minutes, most of which is waiting for a download.
 
-### 1. Install Chatterlayer
+### 1. Install ChatterLayer
 
 Grab the latest build from the
-[Releases page](https://github.com/ruptz/Chatterlayer/releases). There's a normal
+[Releases page](https://github.com/ruptz/ChatterLayer/releases). There's a normal
 installer and a portable version if you'd rather not install anything.
 
 > **Windows will warn you on first launch.** The builds aren't code-signed (that
@@ -87,11 +87,11 @@ installer and a portable version if you'd rather not install anything.
 >
 > **On macOS** it's a bit worse — Gatekeeper may claim the app is "damaged". It
 > isn't. Right-click the app → *Open*, or run
-> `xattr -cr /Applications/Chatterlayer.app` in Terminal.
+> `xattr -cr /Applications/ChatterLayer.app` in Terminal.
 
 ### 2. Pick a speech model
 
-On first launch Chatterlayer asks which speech model to download. Models aren't
+On first launch ChatterLayer asks which speech model to download. Models aren't
 bundled with the app because they range from 40 MB to 2.5 GB and you only need
 one.
 
@@ -104,16 +104,16 @@ details and the measured numbers.
 
 ### 3. Create your Discord bot
 
-Chatterlayer needs a bot account to sit in your voice channel and listen. This is
+ChatterLayer needs a bot account to sit in your voice channel and listen. This is
 free and takes about two minutes.
 
 1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
    and click **New Application**. Name it whatever you like.
 2. Open the **Bot** tab → **Add Bot**.
 3. Click **Reset Token**, then **Copy**. This is what you paste into
-   Chatterlayer. **Treat it like a password** — anyone who has it controls your
+   ChatterLayer. **Treat it like a password** — anyone who has it controls your
    bot.
-4. **Leave all the Privileged Gateway Intents switched off.** Chatterlayer
+4. **Leave all the Privileged Gateway Intents switched off.** ChatterLayer
    doesn't need them. If "Server Members" or "Message Content" are on, turn them
    off.
 5. Open **OAuth2 → URL Generator** and tick:
@@ -127,11 +127,11 @@ free and takes about two minutes.
 
 ### 4. Paste your token and pick a channel
 
-Open Chatterlayer and paste your **bot token** into the **Source** panel. It
+Open ChatterLayer and paste your **bot token** into the **Source** panel. It
 signs in, and the **Server** and **Voice channel** dropdowns fill with
 everywhere your bot can go. Pick one and hit **Connect**.
 
-There's no channel ID to copy and no Developer Mode to turn on. Chatterlayer
+There's no channel ID to copy and no Developer Mode to turn on. ChatterLayer
 also checks permissions while it's listing, so:
 
 - Channels your bot **can't join** are greyed out, with the missing permission
@@ -147,9 +147,9 @@ captioned until you switch them on.
 
 Your token is saved encrypted using your operating system's own keystore (DPAPI
 on Windows, Keychain on macOS, libsecret on Linux), so you only paste it once —
-after that Chatterlayer signs in by itself at launch and the dropdowns are ready
+after that ChatterLayer signs in by itself at launch and the dropdowns are ready
 when you open it. Your bot therefore shows as **online in Discord whenever
-Chatterlayer is open**, not only while you're captioning.
+ChatterLayer is open**, not only while you're captioning.
 
 > If a channel doesn't show up — a brand-new one, say — hit **Refresh**. There's
 > also an **Enter a channel ID manually** fallback under the picker if you ever
@@ -158,7 +158,7 @@ Chatterlayer is open**, not only while you're captioning.
 ### 5. Add the overlay to OBS
 
 1. In OBS: **Sources → + → Browser**.
-2. **URL:** copy it from Chatterlayer's **Output** panel — normally
+2. **URL:** copy it from ChatterLayer's **Output** panel — normally
    `http://127.0.0.1:8777/overlay`.
 3. **Width / Height:** match your canvas, e.g. `1920` × `1080`.
 4. Tick **Shutdown source when not visible** and **Refresh browser when scene
@@ -167,7 +167,7 @@ Chatterlayer is open**, not only while you're captioning.
    margin, so leaving the source at full canvas size and positioning it at 0,0
    usually just works.
 
-The overlay reconnects on its own, so you can add the source before Chatterlayer
+The overlay reconnects on its own, so you can add the source before ChatterLayer
 is even running, and it survives you restarting the app mid-stream.
 
 **Nothing is exposed to the internet.** The caption server only listens on
@@ -241,7 +241,7 @@ one. Switching engines needs a reconnect — the model is loaded once, at connec
 
 The **Channels** panel lists everyone in the voice call with a toggle each.
 
-Flip someone **on** and Chatterlayer starts transcribing them immediately. Flip
+Flip someone **on** and ChatterLayer starts transcribing them immediately. Flip
 them **off** and it stops and frees the memory. You can do this live, mid-call,
 as often as you like — nothing reconnects and nothing drops.
 
@@ -260,7 +260,7 @@ Clear the field to go back to their Discord name.
 Both apply to the very next caption. No restart, no OBS refresh.
 
 Colours are assigned automatically from each person's Discord ID, so the same
-friend gets the same colour every time — and Chatterlayer guarantees **no two
+friend gets the same colour every time — and ChatterLayer guarantees **no two
 people in the same call share a colour** (up to 16 people, which is where the
 palette runs out).
 
@@ -293,24 +293,24 @@ first place to look if something's not working.
 ## Sharing captions with your co-streamers
 
 When four people in the same call are all live, you don't need four copies of
-Chatterlayer. One person runs it; everyone else points OBS at a link.
+ChatterLayer. One person runs it; everyone else points OBS at a link.
 
 That saves the others a bot, a speech model and the CPU to run it — and it means
 every stream shows the *same* captions instead of four slightly different
 transcriptions of the same conversation.
 
-**This is off by default and never starts on its own.** Chatterlayer is offline
+**This is off by default and never starts on its own.** ChatterLayer is offline
 software and stays that way unless you deliberately do this, every time:
 
 1. Open **Remote overlay** and tick *Let other streamers use these captions*.
    Nothing has opened yet — this only reveals the controls.
-2. Press **Start tunnel**. The first time, Chatterlayer downloads
+2. Press **Start tunnel**. The first time, ChatterLayer downloads
    [cloudflared](https://github.com/cloudflare/cloudflared) (~35 MB, kept for
    next time). If you already have `cloudflared` on your PATH, that one is used.
 3. Copy the link it gives you and send it to your co-streamers. They paste it
    into a **Browser** source in OBS, exactly like the local one.
 
-Press **Stop tunnel**, or just close Chatterlayer, and the link dies. The tunnel
+Press **Stop tunnel**, or just close ChatterLayer, and the link dies. The tunnel
 is always closed again the next time the app starts, however you left the tick
 box.
 
@@ -330,7 +330,7 @@ to can watch your voice channel's captions for as long as the tunnel is up.
 
 **One link, one session.** The key is generated fresh every time you press Start
 and only ever exists in memory — it is never written to your config file. Stop
-the tunnel, or close Chatterlayer, and it's gone for good. There is nothing to
+the tunnel, or close ChatterLayer, and it's gone for good. There is nothing to
 clean up later and no old key sitting on disk; last week's link is dead twice
 over, since the tunnel hostname was random too.
 
@@ -384,7 +384,7 @@ affect nobody else.
 ### What to know before you rely on it
 
 - **The link changes every time you start the tunnel.** Quick Tunnels get a
-  random hostname, so your co-streamers re-paste after you restart Chatterlayer.
+  random hostname, so your co-streamers re-paste after you restart ChatterLayer.
   Sort it out before you go live, not during.
 - **Cloudflare makes no uptime promise** for Quick Tunnels. They're free and
   need no Cloudflare account or domain, and that's the trade.
@@ -403,7 +403,7 @@ front of your audience.
 
 **Tell them.** Use the per-person toggles to caption only the people who've
 actually agreed. In some countries and US states, recording or transcribing
-someone without their consent is illegal. Chatterlayer ships with everyone
+someone without their consent is illegal. ChatterLayer ships with everyone
 switched **off** by default specifically so that the safe option is the default
 one.
 
@@ -496,7 +496,7 @@ hears "as not" for "ask not", and Vosk Medium drops the plural on "Americans".
 
 - **Free and unmetered.** Cloud speech-to-text runs about $0.02–0.06 per streamed
   hour *per person*. Seven people across a five-hour stream is real money, every
-  single stream. Chatterlayer costs nothing to run, ever.
+  single stream. ChatterLayer costs nothing to run, ever.
 - **Private.** Your friends' voices never leave your machine. No provider terms
   to read, no data retention questions, no third party in the loop.
 - **Nothing to break mid-stream.** No API key to expire, no quota to hit, no
@@ -523,7 +523,7 @@ Open the model picker (**Get models**) and download one.
 The sign-in line under the dropdown says which it is.
 
 - *Sign-in failed* — the token is wrong, or you reset it in the Developer Portal
-  and Chatterlayer still has the old one. Paste the current token and press
+  and ChatterLayer still has the old one. Paste the current token and press
   **Refresh**.
 - *Signed in, but no servers* — the bot isn't in a server yet, or the only ones
   it's in have no voice channels. Re-run the invite URL from step 3.
@@ -574,7 +574,7 @@ update the URL in your OBS browser source to match.
 
 - Check the URL matches the one shown in the **Output** panel (the port may have
   changed).
-- Make sure Chatterlayer is actually running.
+- Make sure ChatterLayer is actually running.
 - Open the same URL in a normal browser: if the overlay can't reach the app,
   you'll see a "connecting" badge, which tells you it's a connection problem
   rather than an OBS problem.
@@ -587,8 +587,8 @@ You're CPU-bound. Caption fewer people, or switch to a smaller model.
 ---
 
 **Someone's audio dies mid-call, and the log mentions "Failed to decrypt"**
-This is a Discord end-to-end-encryption quirk, not a Chatterlayer bug.
-Chatterlayer already works around it and rebuilds broken audio streams
+This is a Discord end-to-end-encryption quirk, not a ChatterLayer bug.
+ChatterLayer already works around it and rebuilds broken audio streams
 automatically (5 attempts). If someone's captions stop for good, toggle them off
 and back on. Full explanation in the
 [developer section](#the-dave-encryption-problem).
@@ -597,7 +597,7 @@ and back on. Full explanation in the
 
 **Audio receive stops working after a Discord update**
 Receiving voice as a bot isn't an officially supported part of Discord's API,
-though the library Chatterlayer uses has supported it for years. If Discord
+though the library ChatterLayer uses has supported it for years. If Discord
 changes something, this can break until the library catches up. Worth knowing
 before you build your whole stream layout around it.
 
@@ -605,7 +605,7 @@ before you build your whole stream layout around it.
 
 ## Support the project
 
-Chatterlayer is free and always will be — no tiers, no upsell, no "pro" version
+ChatterLayer is free and always will be — no tiers, no upsell, no "pro" version
 holding the good features hostage.
 
 If it's earned you a coffee, there's a **Buy me a coffee** button in the bottom
@@ -613,7 +613,7 @@ corner of the app, or [ko-fi.com/ruptz](https://ko-fi.com/ruptz). Entirely
 optional, and nothing in the app changes either way.
 
 Bug reports and feature ideas are just as welcome — open an
-[issue](https://github.com/ruptz/Chatterlayer/issues).
+[issue](https://github.com/ruptz/ChatterLayer/issues).
 
 ---
 
@@ -633,7 +633,7 @@ usage is subject to Discord's Terms of Service.
 # For developers
 
 Everything below this line is for people building, modifying or packaging
-Chatterlayer. You don't need any of it to use the app.
+ChatterLayer. You don't need any of it to use the app.
 
 **Contents**
 
@@ -652,8 +652,8 @@ Requires **Node.js 18+** (developed and tested on 22). **No compiler toolchain**
 no Visual Studio, no Python, no `node-gyp`.
 
 ```bash
-git clone https://github.com/ruptz/Chatterlayer.git
-cd Chatterlayer
+git clone https://github.com/ruptz/ChatterLayer.git
+cd ChatterLayer
 npm install
 npm run setup     # the recommended model (Moonshine — needs no libvosk)
 npm start
@@ -724,14 +724,14 @@ cached, and rendering that as "can't join" would grey out channels that work.
 been unmaintained since 2022 and fails to compile on Node 18+ (`ffi-napi`'s
 bundled libffi errors out during assembly preprocessing). Forcing it to build
 would require every user to install Visual Studio Build Tools and Python, plus an
-`electron-rebuild` pass. Chatterlayer instead binds the **same official libvosk**
+`electron-rebuild` pass. ChatterLayer instead binds the **same official libvosk**
 through [koffi](https://koffi.dev/), which ships prebuilt N-API binaries — so the
 same install works on both Node and Electron with no toolchain. See
 `src/engine/vosk-binding.js`.
 
 **Why persistent audio subscriptions.** Subscribing on each `speaking start` event
 races the first voice packet and clips the first word of every utterance.
-Chatterlayer holds a persistent subscription per selected speaker and uses
+ChatterLayer holds a persistent subscription per selected speaker and uses
 speaking events only to flush utterance boundaries. Discord sends no packets
 during silence, so idle subscriptions are free.
 
@@ -743,7 +743,7 @@ enough: with a 16-colour palette, **seven random users collide about 78% of the
 time** (the birthday bound — measured, not theoretical), and two speakers sharing
 a colour defeats the entire point.
 
-So Chatterlayer assigns colours across the *whole call* at once. Each person
+So ChatterLayer assigns colours across the *whole call* at once. Each person
 prefers their hashed colour; when two want the same one, the assignment probes
 forward through the palette. Iterating in sorted ID order keeps it deterministic —
 the same group always gets the same colours. Manual overrides are reserved first
@@ -773,7 +773,7 @@ still *appears* in the voice channel — that part is the main gateway — but t
 voice connection never receives `SESSION_DESCRIPTION`, never reaches `Ready`, and
 the join times out after 30 s with "Could not join #channel within 30s".
 
-Chatterlayer instead leaves DAVE enabled and raises `decryptionFailureTolerance`.
+ChatterLayer instead leaves DAVE enabled and raises `decryptionFailureTolerance`.
 That works because of how `@discordjs/voice` consumes the result (`onUdpMessage`):
 an undecryptable packet returns nothing and is **skipped harmlessly**, but once
 the tolerance is exceeded it *throws*, and the throw calls `stream.destroy(error)`,
@@ -840,7 +840,7 @@ Two measured caveats:
 
 - **Whisper's memory is mostly not its weights.** Whisper Small is a 380 MB model
   that peaks at 1.8 GB, because its encoder input is a fixed 30-second window and
-  the activations are large. Chatterlayer therefore runs the Whisper sessions
+  the activations are large. ChatterLayer therefore runs the Whisper sessions
   with ONNX Runtime's memory arena **disabled** — with it on, Whisper Small peaks
   at 3.6 GB instead, in exchange for about a third off the decode time. Set
   `CHATTERLAYER_STT_ARENA=1` to take that trade the other way. Moonshine and
@@ -1049,7 +1049,7 @@ publish.
 ### How users find out
 
 The running version is stamped in the top-right of the control panel. Once a
-day Chatterlayer asks GitHub whether a newer release exists; if there is one,
+day ChatterLayer asks GitHub whether a newer release exists; if there is one,
 the stamp lights amber and opens the release page when clicked.
 
 Nothing is downloaded and nothing self-installs — see the comment at the top of
@@ -1062,7 +1062,7 @@ Two things worth knowing:
 - **Drafts are invisible to it.** The check reads GitHub's *latest published
   release*, which excludes drafts and prereleases. Nobody is notified until you
   actually hit publish on the draft the workflow opened.
-- **It's the only request Chatterlayer makes on its own** — everything else is
+- **It's the only request ChatterLayer makes on its own** — everything else is
   Discord and localhost. It's a visible setting for that reason: **Output →
   Check for updates**, on by default. Switched off, no request is made at all.
 
@@ -1084,9 +1084,9 @@ the main reason to release through CI rather than by hand.
 
 | Platform | Artifacts |
 |---|---|
-| Windows | `Chatterlayer-<version>-Setup.exe` (installer), `Chatterlayer-<version>-portable.exe` |
-| macOS | `Chatterlayer-<version>.dmg` (x64 + arm64) |
-| Linux | `Chatterlayer-<version>.AppImage`, `.deb` |
+| Windows | `ChatterLayer-<version>-Setup.exe` (installer), `ChatterLayer-<version>-portable.exe` |
+| macOS | `ChatterLayer-<version>.dmg` (x64 + arm64) |
+| Linux | `ChatterLayer-<version>.AppImage`, `.deb` |
 
 Roughly 90–140 MB per file. Speech models are **not** included — the app downloads
 the one the user picks on first run.
@@ -1102,7 +1102,7 @@ before you announce anything:
   through.
 - **macOS** — considerably worse. Gatekeeper refuses to open unsigned apps and
   often claims the app is "damaged". Users must right-click → *Open*, or run
-  `xattr -cr /Applications/Chatterlayer.app`. Fixing this properly needs an Apple
+  `xattr -cr /Applications/ChatterLayer.app`. Fixing this properly needs an Apple
   Developer account ($99/yr) plus notarisation. The release notes explain the
   workaround.
 - **Linux** — no signing expectations; users just `chmod +x` the AppImage.
@@ -1132,7 +1132,7 @@ it are load-bearing in `electron-builder.yml`:
   The binding pulls in `onnxruntime.dll` as an ordinary shared-library dependency,
   so the OS loader has to find it as a real file beside the binding.
 - `npm install` fetches 246 MB: a library for all six platform/arch combinations
-  plus a DirectML provider. Chatterlayer asks for the CPU provider only, so the
+  plus a DirectML provider. ChatterLayer asks for the CPU provider only, so the
   per-platform `files` filters drop the architectures not being built and the GPU
   libraries — about 200 MB and 38 MB respectively on a Windows build. CI asserts
   both, because the failure mode is silent.

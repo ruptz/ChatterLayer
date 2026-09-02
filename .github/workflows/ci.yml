@@ -105,7 +105,7 @@ jobs:
             fi
           done
           if find dist -name "DirectML.dll" | grep -q .; then
-            echo "::error::DirectML.dll was bundled; Chatterlayer only uses the CPU provider"
+            echo "::error::DirectML.dll was bundled; ChatterLayer only uses the CPU provider"
             exit 1
           fi
           echo "no foreign or GPU ONNX binaries bundled"

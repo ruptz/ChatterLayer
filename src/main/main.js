@@ -115,7 +115,7 @@ function send(channel, payload) {
 // ------------------------------------------------------------------ tray ---
 
 /**
- * Chatterlayer is running for as long as the stream is, and for most of that
+ * ChatterLayer is running for as long as the stream is, and for most of that
  * time nobody needs to look at it. Closing the window therefore parks it in the
  * tray rather than ending the call: pressing × on a window that is holding a
  * Discord voice connection and serving captions to OBS should not be the way a
@@ -168,12 +168,12 @@ function renderTray() {
   if (!tray) return;
 
   const running = trayStatus.state === 'onair' || trayStatus.state === 'linking';
-  tray.setToolTip(`Chatterlayer — ${statusLabel()}`);
+  tray.setToolTip(`ChatterLayer — ${statusLabel()}`);
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: statusLabel(), enabled: false },
       { type: 'separator' },
-      { label: 'Show Chatterlayer', click: showWindow },
+      { label: 'Show ChatterLayer', click: showWindow },
       {
         label: 'Disconnect',
         enabled: running,
@@ -182,7 +182,7 @@ function renderTray() {
         },
       },
       { type: 'separator' },
-      { label: 'Quit Chatterlayer', click: () => app.quit() },
+      { label: 'Quit ChatterLayer', click: () => app.quit() },
     ])
   );
 }
@@ -213,7 +213,7 @@ function createWindow() {
     height: 840,
     minWidth: 900,
     minHeight: 640,
-    title: 'Chatterlayer',
+    title: 'ChatterLayer',
     backgroundColor: '#191b1a', // matches --chassis so launch doesn't flash
     show: false,
     webPreferences: {
@@ -242,7 +242,7 @@ function createWindow() {
       // needs to say where it went, once.
       if (tray && process.platform === 'win32') {
         tray.displayBalloon({
-          title: 'Chatterlayer is still running',
+          title: 'ChatterLayer is still running',
           content: 'Captions keep going. Click the tray icon to bring it back, or right-click to quit.',
         });
       }
@@ -433,7 +433,7 @@ async function bootstrap() {
   // before the user goes looking for them. This only logs the bot in — no
   // speech model is loaded and no voice channel is joined until Connect.
   // Side effect worth knowing: the bot shows as online in Discord for as long
-  // as Chatterlayer is open, not just while captioning.
+  // as ChatterLayer is open, not just while captioning.
   if (config.getToken()) engine.signIn(config.getToken());
 }
 

@@ -1,11 +1,11 @@
-# Chatterlayer packaging configuration
+# ChatterLayer packaging configuration
 #
 # Kept in YAML rather than package.json so the non-obvious decisions can carry
 # comments explaining themselves — several of them are load-bearing.
 
 appId: com.ruptz.chatterlayer
-productName: Chatterlayer
-copyright: Copyright © Chatterlayer contributors. MIT licensed.
+productName: ChatterLayer
+copyright: Copyright © ChatterLayer contributors. MIT licensed.
 
 directories:
   output: dist
@@ -23,7 +23,7 @@ files:
   - '!**/{.DS_Store,Thumbs.db}'
 
   # onnxruntime-node installs 246 MB: a CPU library for all six
-  # platform/arch combinations, plus a DirectML provider. Chatterlayer asks for
+  # platform/arch combinations, plus a DirectML provider. ChatterLayer asks for
   # the CPU execution provider only (see src/engine/stt/onnx.js), so the GPU
   # libraries are 38 MB of dead weight on Windows alone. The per-platform
   # sections below drop the architectures not being built.
@@ -85,8 +85,8 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: Chatterlayer
-  uninstallDisplayName: Chatterlayer
+  shortcutName: ChatterLayer
+  uninstallDisplayName: ChatterLayer
   # Downloaded models live in userData and can be several GB. Deleting them on
   # uninstall would be a nasty surprise for anyone reinstalling.
   deleteAppDataOnUninstall: false

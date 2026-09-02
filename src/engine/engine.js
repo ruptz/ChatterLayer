@@ -62,7 +62,7 @@ function onceWithTimeout(emitter, event, timeoutMs, label) {
   });
 }
 
-class ChatterlayerEngine {
+class ChatterLayerEngine {
   constructor(emit) {
     this.emit = emit;
     this.client = null;
@@ -718,7 +718,7 @@ const emit = (msg) => {
   else if (process.env.CHATTERLAYER_VERBOSE) console.log(JSON.stringify(msg));
 };
 
-const engine = new ChatterlayerEngine(emit);
+const engine = new ChatterLayerEngine(emit);
 
 async function handleCommand(msg) {
   try {
@@ -778,4 +778,4 @@ if (process.argv.includes('--headless')) {
   });
 }
 
-module.exports = { ChatterlayerEngine };
+module.exports = { ChatterLayerEngine };

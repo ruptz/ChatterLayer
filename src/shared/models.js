@@ -337,7 +337,7 @@ function download(url, dest, onProgress, redirects = 0) {
   return new Promise((resolve, reject) => {
     if (redirects > 8) return reject(new Error('Too many redirects'));
 
-    const request = https.get(url, { headers: { 'User-Agent': 'Chatterlayer' } }, (res) => {
+    const request = https.get(url, { headers: { 'User-Agent': 'ChatterLayer' } }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
         // Location may be relative — HuggingFace's first hop is a bare path such

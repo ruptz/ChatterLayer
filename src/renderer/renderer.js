@@ -83,7 +83,7 @@ let state = {
   share: { enabled: false, running: false, busy: false, origin: '', url: '' },
   /** Running version and where to send someone who wants a newer one. */
   version: '',
-  releasesUrl: 'https://github.com/ruptz/Chatterlayer/releases/latest',
+  releasesUrl: 'https://github.com/ruptz/ChatterLayer/releases/latest',
   update: null,
 };
 /** userId -> the monitor line currently showing that speaker's partial text. */
@@ -274,7 +274,7 @@ function updateChannelNote() {
 
   const notes = [];
   // Joining a stage puts a bot in the audience, where it receives no audio at
-  // all. Without this note that failure looks like Chatterlayer being broken.
+  // all. Without this note that failure looks like ChatterLayer being broken.
   if (c.stage) {
     notes.push(
       'Stage channel — the bot joins as audience and hears nothing until you invite it to speak.'
@@ -285,7 +285,7 @@ function updateChannelNote() {
 
   el.channelNote.textContent = notes.length
     ? notes.join(' ')
-    : 'Chatterlayer will join this channel and list everyone in it.';
+    : 'ChatterLayer will join this channel and list everyone in it.';
   if (notes.length) el.channelNote.dataset.state = 'working';
   else el.channelNote.removeAttribute('data-state');
 }
@@ -735,7 +735,7 @@ function renderModels() {
     el.model.appendChild(opt);
     el.model.disabled = true;
     el.modelNote.textContent =
-      'Chatterlayer needs a speech model before it can caption. Choose one below.';
+      'ChatterLayer needs a speech model before it can caption. Choose one below.';
     // Nothing works without a model, so open the picker rather than making the
     // user hunt for it.
     el.modelList.hidden = false;
@@ -992,7 +992,7 @@ async function refreshUpdate(announce = false) {
   renderUpdate(update);
 
   if (update.state === 'available') {
-    log(`Chatterlayer ${update.latest} is out — you're on v${update.current}.`);
+    log(`ChatterLayer ${update.latest} is out — you're on v${update.current}.`);
   } else if (announce && update.state === 'current') {
     log(`You're on the latest build (v${update.current}).`);
   } else if (announce && update.state === 'error') {
@@ -1095,7 +1095,7 @@ async function init() {
 
   renderMembers();
   renderUpdate(null);
-  log(`Chatterlayer v${state.version} ready.`);
+  log(`ChatterLayer v${state.version} ready.`);
 
   // Deliberately not awaited: the window is usable before GitHub answers, and
   // the request gives up after six seconds either way.
@@ -1306,8 +1306,8 @@ el.closeToTray.addEventListener('change', async () => {
   });
   log(
     on
-      ? 'Closing the window will keep Chatterlayer running in the tray.'
-      : 'Closing the window will now quit Chatterlayer and end the call.'
+      ? 'Closing the window will keep ChatterLayer running in the tray.'
+      : 'Closing the window will now quit ChatterLayer and end the call.'
   );
 });
 
@@ -1335,7 +1335,7 @@ el.checkUpdates.addEventListener('change', async () => {
   } else {
     state.update = { state: 'off' };
     renderUpdate(state.update);
-    log('Update checks off — Chatterlayer now makes no requests of its own.');
+    log('Update checks off — ChatterLayer now makes no requests of its own.');
   }
 });
 

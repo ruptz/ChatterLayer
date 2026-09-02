@@ -62,7 +62,7 @@ function findLibrary(hint) {
   // Not plain "npm run setup" — that fetches the recommended model, which is a
   // Moonshine one and does not pull the Vosk runtime down with it.
   throw new Error(
-    `Chatterlayer: could not find ${LIB_FILENAME}.\n` +
+    `ChatterLayer: could not find ${LIB_FILENAME}.\n` +
       `Run "npm run setup -- --runtime-only" to download the Vosk runtime, or ` +
       `set CHATTERLAYER_VOSK_LIB to its location.`
   );
@@ -143,7 +143,7 @@ class VoskModel {
   constructor(modelPath, libHint) {
     if (!fs.existsSync(modelPath)) {
       throw new Error(
-        `Chatterlayer: Vosk model not found at "${modelPath}".\n` +
+        `ChatterLayer: Vosk model not found at "${modelPath}".\n` +
           `Run "npm run setup" to download it.`
       );
     }
@@ -152,7 +152,7 @@ class VoskModel {
       !fs.existsSync(path.join(modelPath, 'am'))
     ) {
       throw new Error(
-        `Chatterlayer: "${modelPath}" does not look like a Vosk model ` +
+        `ChatterLayer: "${modelPath}" does not look like a Vosk model ` +
           `(no conf/ or am/ inside). Point at the extracted model folder itself.`
       );
     }
@@ -160,7 +160,7 @@ class VoskModel {
     this.api = loadApi(libHint);
     this.handle = this.api.modelNew(modelPath);
     if (!this.handle) {
-      throw new Error(`Chatterlayer: Vosk failed to load the model at "${modelPath}".`);
+      throw new Error(`ChatterLayer: Vosk failed to load the model at "${modelPath}".`);
     }
     this.path = modelPath;
   }
@@ -178,7 +178,7 @@ class VoskRecognizer {
   constructor(model, sampleRate = 16000, { words = false } = {}) {
     this.api = model.api;
     this.handle = this.api.recognizerNew(model.handle, sampleRate);
-    if (!this.handle) throw new Error('Chatterlayer: failed to create Vosk recognizer.');
+    if (!this.handle) throw new Error('ChatterLayer: failed to create Vosk recognizer.');
     if (words) this.api.recognizerSetWords(this.handle, 1);
   }
 

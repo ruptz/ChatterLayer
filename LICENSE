@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 ruptz and Chatterlayer contributors
+Copyright (c) 2026 ruptz and ChatterLayer contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,7 @@ SOFTWARE.
 
 ---
 
-Chatterlayer bundles the Vosk speech recognition runtime (libvosk), which is
+ChatterLayer bundles the Vosk speech recognition runtime (libvosk), which is
 licensed under the Apache License 2.0 — https://github.com/alphacep/vosk-api
 
 Speech models are downloaded by the user at runtime and are not distributed

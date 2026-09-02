@@ -565,12 +565,12 @@ test('all source files parse', () => {
 // --- channel picker ------------------------------------------------------
 
 const { ChannelType, PermissionsBitField } = require('discord.js');
-const { ChatterlayerEngine } = require('../src/engine/engine');
+const { ChatterLayerEngine } = require('../src/engine/engine');
 
 console.log('\nchannel picker');
 
 const F = PermissionsBitField.Flags;
-const BOT = { id: 'bot-1', tag: 'Chatterlayer#0001' };
+const BOT = { id: 'bot-1', tag: 'ChatterLayer#0001' };
 
 /** `granted: null` stands in for "the bot's own member isn't cached". */
 function fakeChannel({ name = 'general', granted = [F.ViewChannel, F.Connect], ...rest } = {}) {
@@ -587,7 +587,7 @@ function fakeChannel({ name = 'general', granted = [F.ViewChannel, F.Connect], .
   };
 }
 
-const picker = new ChatterlayerEngine(() => {});
+const picker = new ChatterLayerEngine(() => {});
 const describe = (ch) => picker.describeChannel(ch, BOT);
 
 test('a channel the bot can see and connect to is joinable', () => {
@@ -642,7 +642,7 @@ test('user limit does not apply to a bot that can move members', () => {
 
 test('the guild tree lists voice channels only, and drops empty servers', () => {
   const guild = (name, channels) => [name, { id: `g-${name}`, name, channels: { cache: new Map(channels.map((c, i) => [i, c])) } }];
-  const engine = new ChatterlayerEngine(() => {});
+  const engine = new ChatterLayerEngine(() => {});
   engine.client = {
     isReady: () => true,
     user: BOT,

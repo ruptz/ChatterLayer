@@ -414,7 +414,7 @@ async function main() {
     models = [hit];
   } else models = [resolveModel()];
 
-  console.log('Chatterlayer benchmark');
+  console.log('ChatterLayer benchmark');
   console.log('======================');
   console.log(`node     : ${process.version}  ${process.platform}-${process.arch}`);
   console.log(`cpu      : ${os.cpus().length} logical cores` +

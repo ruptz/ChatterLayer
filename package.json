@@ -1,16 +1,16 @@
 {
   "name": "chatterlayer",
-  "productName": "Chatterlayer",
+  "productName": "ChatterLayer",
   "version": "0.1.0",
   "description": "Live, colour-coded Discord voice captions for OBS. Free, offline, fully local.",
   "main": "src/main/main.js",
   "author": "ruptz",
   "license": "MIT",
   "private": true,
-  "homepage": "https://github.com/ruptz/Chatterlayer",
+  "homepage": "https://github.com/ruptz/ChatterLayer",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ruptz/Chatterlayer.git"
+    "url": "https://github.com/ruptz/ChatterLayer.git"
   },
   "scripts": {
     "start": "electron .",

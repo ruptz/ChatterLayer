@@ -9,7 +9,7 @@
  * replace themselves. A link to the release page is the one answer that works
  * for every build we ship.
  *
- * This is also the only request Chatterlayer makes on its own initiative —
+ * This is also the only request ChatterLayer makes on its own initiative —
  * everything else is Discord and localhost — so it runs once per launch, gives
  * up quickly, and can be switched off in the UI.
  *
@@ -21,7 +21,7 @@
 
 const https = require('https');
 
-const OWNER_REPO = 'ruptz/Chatterlayer';
+const OWNER_REPO = 'ruptz/ChatterLayer';
 /** GitHub excludes drafts and prereleases from this endpoint, which is what
  *  we want: the release workflow publishes drafts for review first. */
 const LATEST_API = `https://api.github.com/repos/${OWNER_REPO}/releases/latest`;
@@ -129,7 +129,7 @@ async function checkForUpdate({ currentVersion, cache = {}, force = false, endpo
   }
 
   try {
-    const latest = await fetchLatestTag(`Chatterlayer/${currentVersion}`, endpoint);
+    const latest = await fetchLatestTag(`ChatterLayer/${currentVersion}`, endpoint);
     return {
       ...base,
       state: verdict(currentVersion, latest),

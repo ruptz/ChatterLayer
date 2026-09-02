@@ -167,7 +167,7 @@ function resolveModel(override) {
     const identity = identifyModelDir(full);
     if (!identity) {
       throw new Error(
-        `Chatterlayer: "${full}" does not look like a speech model Chatterlayer ` +
+        `ChatterLayer: "${full}" does not look like a speech model ChatterLayer ` +
           `can open. Pick one from the Speech model panel.`
       );
     }
@@ -184,7 +184,7 @@ function resolveModel(override) {
   if (installed.length) return installed[0];
 
   throw new Error(
-    'Chatterlayer: no speech model installed yet. Open Chatterlayer and download ' +
+    'ChatterLayer: no speech model installed yet. Open ChatterLayer and download ' +
       'one from the Speech model panel (or run "npm run setup" from source).'
   );
 }

@@ -141,9 +141,9 @@ jobs:
           files: artifacts/*
           draft: true # review before it goes public
           generate_release_notes: true
-          name: Chatterlayer ${{ steps.tag.outputs.name }}
+          name: ChatterLayer ${{ steps.tag.outputs.name }}
           body: |
-            ## Chatterlayer ${{ steps.tag.outputs.name }}
+            ## ChatterLayer ${{ steps.tag.outputs.name }}
 
             Live, colour-coded Discord voice captions for OBS. Free and fully
             offline — speech recognition runs on your own machine. No API keys,
@@ -153,14 +153,14 @@ jobs:
 
             | Platform | File |
             |---|---|
-            | Windows (installer) | `Chatterlayer-*-Setup.exe` |
-            | Windows (portable) | `Chatterlayer-*-portable.exe` |
-            | macOS | `Chatterlayer-*.dmg` |
-            | Linux | `Chatterlayer-*.AppImage` or `.deb` |
+            | Windows (installer) | `ChatterLayer-*-Setup.exe` |
+            | Windows (portable) | `ChatterLayer-*-portable.exe` |
+            | macOS | `ChatterLayer-*.dmg` |
+            | Linux | `ChatterLayer-*.AppImage` or `.deb` |
 
             ### First run
 
-            Chatterlayer asks which **speech model** to download — models aren't
+            ChatterLayer asks which **speech model** to download — models aren't
             bundled because they range from 40 MB to 2.3 GB and you only need
             one. **Medium (~128 MB)** is recommended and right for almost
             everyone. Models are stored in your user data folder and survive
@@ -180,11 +180,11 @@ jobs:
               app as "damaged". It isn't. Either right-click the app →
               *Open* → *Open*, or clear the quarantine flag:
               ```
-              xattr -cr /Applications/Chatterlayer.app
+              xattr -cr /Applications/ChatterLayer.app
               ```
             - **Linux** — mark the AppImage executable first:
               ```
-              chmod +x Chatterlayer-*.AppImage
+              chmod +x ChatterLayer-*.AppImage
               ```
 
             If you'd rather not run unsigned binaries, build from source — it's

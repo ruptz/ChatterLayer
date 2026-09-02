@@ -271,7 +271,7 @@ class CaptionServer {
         if (err.code === 'EADDRINUSE') {
           reject(
             new Error(
-              `Port ${port} is already in use. Pick a different port in Chatterlayer's settings.`
+              `Port ${port} is already in use. Pick a different port in ChatterLayer's settings.`
             )
           );
         } else {
@@ -299,7 +299,7 @@ class CaptionServer {
       // who guesses the tunnel hostname, and it should confirm nothing about
       // who is streaming or whether a key was close.
       res.writeHead(401, { 'Content-Type': 'text/plain; charset=utf-8' });
-      res.end('401 — this Chatterlayer overlay link needs a valid access key.');
+      res.end('401 — this ChatterLayer overlay link needs a valid access key.');
       return;
     }
     // A correct key clears the slate, so one fat-fingered paste doesn't leave

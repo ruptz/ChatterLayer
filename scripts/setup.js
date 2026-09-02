@@ -155,7 +155,7 @@ async function installRuntime() {
 async function main() {
   if (flag('list')) return listModels();
 
-  console.log('Chatterlayer setup');
+  console.log('ChatterLayer setup');
   console.log('==================');
   console.log(`platform : ${process.platform}-${process.arch}`);
   console.log(`vendor   : ${vendorDir()}`);
@@ -195,7 +195,7 @@ async function main() {
     console.log(`      ${target}\n`);
   }
 
-  console.log('Setup complete. Start Chatterlayer with:  npm start');
+  console.log('Setup complete. Start ChatterLayer with:  npm start');
 }
 
 main().catch((err) => {
