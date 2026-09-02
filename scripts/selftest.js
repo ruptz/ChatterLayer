@@ -201,6 +201,14 @@ test('per-file downloads pin a revision and declare exact byte sizes', () => {
         /\/resolve\/[0-9a-f]{40}\//.test(f.url),
         `${m.key}: ${f.as} must pin a commit, not a branch`
       );
+      // sha256 is optional (filled in over time) but must be a real digest
+      // wherever it is present — installFiles() verifies against it.
+      if (f.sha256 != null) {
+        assert.ok(
+          /^[0-9a-f]{64}$/.test(f.sha256),
+          `${m.key}: ${f.as} sha256 must be 64 lowercase hex chars`
+        );
+      }
     }
   }
 });

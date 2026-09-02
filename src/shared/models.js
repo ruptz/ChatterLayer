@@ -25,6 +25,7 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const os = require('os');
+const crypto = require('crypto');
 const extract = require('extract-zip');
 
 const VOSK_BASE = 'https://alphacephei.com/vosk/models';
@@ -258,10 +259,36 @@ const MODEL_CATALOG = [
   },
 ];
 
-/** @param {[string, string, number][]} entries [remote path, local name, bytes] */
+/**
+ * @param {[string, string, number, string?][]} entries
+ *   [remote path, local name, bytes, sha256?]. The revision pin already stops
+ *   the upstream content changing under us; the optional sha256 is a stronger
+ *   check than byte length against a truncated or corrupted download. Fill them
+ *   in from an installed model with `sha256sum` / `certutil -hashfile`.
+ */
 function fromHf(repo, revision, entries) {
   const base = hf(repo, revision);
-  return entries.map(([remote, as, bytes]) => ({ url: `${base}/${remote}`, as, bytes }));
+  return entries.map(([remote, as, bytes, sha256]) => ({
+    url: `${base}/${remote}`,
+    as,
+    bytes,
+    sha256: sha256 || null,
+  }));
+}
+
+/**
+ * Lowercase hex SHA-256 of a file, streamed — the largest model file is 2.4 GB,
+ * past what a single Buffer can hold.
+ * @returns {Promise<string>}
+ */
+function sha256File(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+    stream.on('error', reject);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('end', () => resolve(hash.digest('hex')));
+  });
 }
 
 function findModel(key) {
@@ -487,11 +514,15 @@ async function installFiles(model, target, onProgress) {
     const dest = path.join(target, file.as);
     const part = `${dest}.part`;
 
-    // A file already at its expected size is one an earlier attempt finished.
+    // A file already at its expected size is one an earlier attempt finished —
+    // trust it, unless a checksum says otherwise, in which case re-fetch it.
     if (fs.existsSync(dest) && fs.statSync(dest).size === file.bytes) {
-      done += file.bytes;
-      if (onProgress) onProgress({ phase: 'download', received: done, total });
-      continue;
+      if (!file.sha256 || (await sha256File(dest)) === file.sha256) {
+        done += file.bytes;
+        if (onProgress) onProgress({ phase: 'download', received: done, total });
+        continue;
+      }
+      fs.rmSync(dest, { force: true });
     }
 
     const base = done;
@@ -505,6 +536,15 @@ async function installFiles(model, target, onProgress) {
         `${file.as} downloaded as ${size} bytes but should be ${file.bytes}. ` +
           `The download was truncated or the upstream file changed.`
       );
+    }
+    if (file.sha256) {
+      const got = await sha256File(part);
+      if (got !== file.sha256) {
+        throw new Error(
+          `${file.as} failed its checksum (expected ${file.sha256.slice(0, 12)}…, ` +
+            `got ${got.slice(0, 12)}…). The download is corrupt — try again.`
+        );
+      }
     }
     fs.renameSync(part, dest);
     done += file.bytes;
@@ -582,6 +622,7 @@ module.exports = {
   installFootprintBytes,
   freeDiskBytes,
   sweepPartials,
+  sha256File,
   installModel,
   removeModel,
   download,
