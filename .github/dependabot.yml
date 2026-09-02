@@ -1,0 +1,24 @@
+version: 2
+
+# The overrides block in package.json (brace-expansion, fast-uri, js-yaml) is
+# hand-maintained; without this it rots silently. Weekly is frequent enough for
+# a project that ships on tags, not on merge.
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for the noisy low-risk stuff; majors and the big ones stay
+      # separate so they get read.
+      dev-minor-patch:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
