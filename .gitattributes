@@ -1,0 +1,27 @@
+# Normalise line endings on commit and check out LF everywhere, so a Windows
+# checkout (core.autocrlf=true) no longer rewrites every file to CRLF and lands
+# it in a diff. Text is stored as LF in the repo; editors keep it that way via
+# .editorconfig.
+* text=auto eol=lf
+
+# Shell scripts and anything with a shebang must stay LF regardless.
+*.sh text eol=lf
+
+# Binary assets: never touch, never diff as text.
+*.png binary
+*.ico binary
+*.icns binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.wav binary
+*.mp3 binary
+*.zip binary
+*.gz binary
+*.tgz binary
+*.node binary
+*.dll binary
+*.so binary
+*.dylib binary
+*.onnx binary
