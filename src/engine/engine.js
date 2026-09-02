@@ -41,6 +41,13 @@ const OPUS = { rate: 48000, channels: 2, frameSize: 960 };
 const MODEL_LOAD_TIMEOUT_MS = 300_000;
 const GATEWAY_READY_TIMEOUT_MS = 30_000;
 
+// A worker that has been ready at least once and then dies is restarted in
+// place, up to this many times, before the user is told to reconnect. Mirrors
+// the per-speaker audio-stream budget below. A restart that then stays up for
+// WORKER_HEALTHY_MS is treated as recovered and the budget resets.
+const MAX_WORKER_RESTARTS = 5;
+const WORKER_HEALTHY_MS = 30_000;
+
 /**
  * Every await in the start path is bounded. An unbounded one leaves the UI
  * stuck on "Linking" with nothing to tell the user.
@@ -69,6 +76,11 @@ class ChatterLayerEngine {
     this.receiver = null;
     this.channel = null;
     this.worker = null;
+    /** Raw model-path argument behind the running worker, so a crash can respawn it. */
+    this.modelPath = null;
+    /** Consecutive in-place worker restarts; reset once a restart stays healthy. */
+    this.workerRestarts = 0;
+    this.workerHealthTimer = null;
     /** userIds the streamer has toggled ON */
     this.selected = new Set();
     /** userId -> { opusStream, decoder, resampler } */
@@ -96,6 +108,8 @@ class ChatterLayerEngine {
   startWorker(modelPath) {
     return new Promise((resolve, reject) => {
       const model = resolveModel(modelPath);
+      // Remembered so handleWorkerDown() can respawn the worker on a later crash.
+      this.modelPath = modelPath;
       this.emit({
         type: 'speech',
         state: 'loading',
@@ -104,9 +118,10 @@ class ChatterLayerEngine {
         label: model.label,
       });
 
-      this.worker = new Worker(path.join(__dirname, 'stt-worker.js'), {
+      const worker = new Worker(path.join(__dirname, 'stt-worker.js'), {
         workerData: { model },
       });
+      this.worker = worker;
 
       // Settle exactly once. Without this, a worker that dies during startup
       // (bad model path, missing libvosk) left this promise pending forever and
@@ -125,6 +140,12 @@ class ChatterLayerEngine {
         this.emit({ type: 'speech', state: 'error', message });
         reject(new Error(message));
       };
+      // A death before the worker was ever ready rejects start(), as before. One
+      // after it was ready is recoverable in place — see handleWorkerDown().
+      const lost = (message) => {
+        if (!settled) return fail(message);
+        this.handleWorkerDown(worker, message);
+      };
 
       const loadTimer = setTimeout(
         () =>
@@ -136,7 +157,7 @@ class ChatterLayerEngine {
         MODEL_LOAD_TIMEOUT_MS
       );
 
-      this.worker.on('message', (msg) => {
+      worker.on('message', (msg) => {
         switch (msg.type) {
           case 'ready':
             this.workerReady = true;
@@ -146,7 +167,7 @@ class ChatterLayerEngine {
             this.checkSpeakerLimit();
             return succeed();
           case 'fatal':
-            return fail(msg.message);
+            return lost(msg.message);
           case 'partial':
           case 'final':
             return this.emitCaption(msg);
@@ -164,17 +185,93 @@ class ChatterLayerEngine {
         }
       });
 
-      this.worker.on('error', (err) => {
+      worker.on('error', (err) => {
         this.workerReady = false;
-        fail(`Speech engine failed to start: ${err.message}`);
+        lost(`Speech engine error: ${err.message}`);
       });
-      this.worker.on('exit', (code) => {
+      worker.on('exit', (code) => {
         this.workerReady = false;
-        // Only an *unexpected* exit is a failure; a clean shutdown after
-        // start() succeeded must not reject anything.
-        if (code !== 0) fail(`Speech engine exited unexpectedly (code ${code}).`);
+        // A clean shutdown (code 0) after start() succeeded must not reject or
+        // restart anything.
+        if (code !== 0) lost(`Speech engine exited unexpectedly (code ${code}).`);
       });
     });
+  }
+
+  /**
+   * A worker that had been ready has died mid-call. Restart it in place, with a
+   * budget, the same way a broken audio stream is rebuilt — a silent blackout is
+   * the worst outcome, worse than a visible restart.
+   */
+  handleWorkerDown(deadWorker, reason) {
+    // Anything from a worker we have already replaced, or during teardown, is noise.
+    if (this.stopping || !deadWorker || deadWorker !== this.worker || deadWorker.clDown) {
+      return;
+    }
+    deadWorker.clDown = true;
+    this.workerReady = false;
+    this.worker = null;
+    clearTimeout(this.workerHealthTimer);
+    try {
+      deadWorker.terminate();
+    } catch {
+      /* already gone */
+    }
+    this.scheduleWorkerRestart(reason);
+  }
+
+  scheduleWorkerRestart(reason) {
+    if (this.stopping) return;
+    const attempt = this.workerRestarts + 1;
+    this.workerRestarts = attempt;
+
+    if (attempt > MAX_WORKER_RESTARTS) {
+      this.emit({ type: 'speech', state: 'error', message: reason });
+      this.log(
+        'error',
+        `The speech engine has crashed ${MAX_WORKER_RESTARTS} times (${reason}) — ` +
+          `captions have stopped. Disconnect and connect again to restart it.`
+      );
+      this.emit({
+        type: 'status',
+        state: 'error',
+        message: 'Speech engine stopped — reconnect to restart captions.',
+      });
+      return;
+    }
+
+    this.log(
+      'warn',
+      `Speech engine stopped (${reason}) — restarting ` +
+        `(attempt ${attempt}/${MAX_WORKER_RESTARTS})…`
+    );
+
+    this.startWorker(this.modelPath).then(
+      () => {
+        this.log('info', 'Speech engine restarted.');
+        // The fresh worker knows no speakers; re-add everyone currently on.
+        for (const userId of this.selected) this.worker.postMessage({ type: 'add', userId });
+        // A restart that stays up is treated as recovered, mirroring an audio
+        // stream whose packets start flowing again.
+        clearTimeout(this.workerHealthTimer);
+        this.workerHealthTimer = setTimeout(() => {
+          this.workerRestarts = 0;
+        }, WORKER_HEALTHY_MS);
+        this.workerHealthTimer.unref?.();
+      },
+      (err) => {
+        if (this.worker) {
+          try {
+            this.worker.terminate();
+          } catch {
+            /* gone */
+          }
+          this.worker = null;
+        }
+        this.workerReady = false;
+        this.scheduleWorkerRestart(err.message);
+      }
+    );
   }
 
   /** Attach the speaker's display name before handing the caption upstream. */
@@ -664,6 +761,11 @@ class ChatterLayerEngine {
   async leave({ announce = true } = {}) {
     this.stopping = true;
     this.restarts.clear();
+    // Drop any in-place worker-restart budget; the next Connect starts fresh.
+    this.workerRestarts = 0;
+    this.modelPath = null;
+    clearTimeout(this.workerHealthTimer);
+    this.workerHealthTimer = null;
     for (const userId of [...this.streams.keys()]) this.teardownStream(userId);
 
     if (this.connection) {
