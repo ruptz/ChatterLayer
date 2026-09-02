@@ -279,6 +279,73 @@ function downloadBytes(model) {
   return model.downloadMB * 1e6; // zip entries have no per-file manifest
 }
 
+const PART_SUFFIX = '.part';
+
+/**
+ * Bytes free to a normal user on the volume holding `dirPath`, walking up to the
+ * nearest existing ancestor. Returns null when the platform won't answer, so the
+ * caller can treat "unknown" as "don't block".
+ */
+function freeDiskBytes(dirPath) {
+  let probe = path.resolve(dirPath);
+  while (!fs.existsSync(probe)) {
+    const parent = path.dirname(probe);
+    if (parent === probe) return null;
+    probe = parent;
+  }
+  try {
+    const st = fs.statfsSync(probe);
+    return Number(st.bavail) * Number(st.bsize);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Disk a fetch needs at its peak, with headroom. A `files` model is written in
+ * place, so it is just the byte total plus a little slack. A Vosk zip is fetched
+ * to a temp dir and then unpacked into modelsDir, so budget for the archive plus
+ * a larger unpacked tree.
+ */
+function installFootprintBytes(model) {
+  if (model.files) return downloadBytes(model) + 128 * 1e6;
+  return model.downloadMB * 1e6 * 3;
+}
+
+/**
+ * Delete `.part` files left behind in model directories by a download that was
+ * killed mid-flight. installFiles() re-fetches a whole file rather than resuming
+ * from its `.part`, so these are always dead weight. Safe to call at launch,
+ * when no download is in progress.
+ *
+ * @returns {{ files: number, bytes: number }}
+ */
+function sweepPartials(modelsDirPath) {
+  let files = 0;
+  let bytes = 0;
+  for (const model of MODEL_CATALOG) {
+    const dir = path.join(modelsDirPath, model.dir);
+    let entries;
+    try {
+      entries = fs.readdirSync(dir);
+    } catch {
+      continue; // nothing there — model not installed or never started
+    }
+    for (const name of entries) {
+      if (!name.endsWith(PART_SUFFIX)) continue;
+      const full = path.join(dir, name);
+      try {
+        bytes += fs.statSync(full).size;
+        fs.rmSync(full, { force: true });
+        files++;
+      } catch {
+        /* vanished or locked — leave it */
+      }
+    }
+  }
+  return { files, bytes };
+}
+
 // ------------------------------------------------------------- manifests ---
 
 /**
@@ -462,6 +529,19 @@ async function installModel(key, modelsDirPath, onProgress) {
     return { name: model.dir, path: target, engine: model.engine };
   }
 
+  // Fail up front on an obviously-too-small disk rather than partway through a
+  // multi-GB download with a write error.
+  const need = installFootprintBytes(model);
+  const free = freeDiskBytes(modelsDirPath);
+  if (free !== null && free < need) {
+    const gb = (n) => (n / 1e9).toFixed(1);
+    throw new Error(
+      `Not enough free disk space for ${model.label}: it needs about ${gb(need)} GB ` +
+        `free, but only ${gb(free)} GB is available where models are stored. ` +
+        `Free up some space and try again.`
+    );
+  }
+
   fs.mkdirSync(modelsDirPath, { recursive: true });
 
   try {
@@ -499,6 +579,9 @@ module.exports = {
   findModelByDir,
   catalogWithStatus,
   downloadBytes,
+  installFootprintBytes,
+  freeDiskBytes,
+  sweepPartials,
   installModel,
   removeModel,
   download,

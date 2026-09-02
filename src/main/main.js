@@ -32,7 +32,12 @@ const {
   modelsDir,
   vendorDir,
 } = require('../shared/paths');
-const { catalogWithStatus, installModel, removeModel } = require('../shared/models');
+const {
+  catalogWithStatus,
+  installModel,
+  removeModel,
+  sweepPartials,
+} = require('../shared/models');
 const { buildFilter, maskText } = require('../shared/wordfilter');
 const { checkForUpdate, RELEASES_PAGE } = require('./updates');
 
@@ -407,6 +412,23 @@ function wireEngine() {
 async function bootstrap() {
   config = new ConfigStore();
   rebuildFilter();
+
+  // Reclaim space from any model download killed mid-flight last run. The next
+  // attempt re-fetches whole files, so a leftover .part is only wasted disk.
+  try {
+    const swept = sweepPartials(modelsDir());
+    if (swept.files) {
+      send('chatterlayer:event', {
+        type: 'log',
+        level: 'info',
+        message:
+          `Cleared ${swept.files} unfinished model download ` +
+          `file${swept.files === 1 ? '' : 's'} (${(swept.bytes / 1e6).toFixed(0)} MB).`,
+      });
+    }
+  } catch {
+    /* best effort */
+  }
   server = new CaptionServer();
   engine = new EngineHost();
   // Constructed, not started. Remote sharing is always down at launch, however
