@@ -303,6 +303,7 @@ function addSpeaker(userId) {
 }
 
 function removeSpeaker(userId) {
+  pushFailures.delete(userId);
   const speaker = speakers.get(userId);
   if (!speaker) return;
   // Emit anything still buffered so the last words aren't lost on toggle-off.
@@ -320,13 +321,50 @@ function removeSpeaker(userId) {
   post({ type: 'speakerRemoved', userId, rss: rss() });
 }
 
+/**
+ * A speaker whose pushAudio() throws on essentially every packet (a wedged FFI
+ * session, a requantised graph) would otherwise post one `error` per 20 ms of
+ * audio and bury the log. Report the first failure, stay quiet through a short
+ * run of them, and if it never recovers stop feeding that speaker altogether —
+ * toggling them off and on rebuilds the recognizer.
+ */
+const MAX_PUSH_FAILURES = 12; // ~240 ms of 20 ms packets
+/** userId -> consecutive pushAudio failures; cleared on the first success. */
+const pushFailures = new Map();
+
 function pushAudio(userId, arrayBuf) {
   const speaker = speakers.get(userId);
   if (!speaker) return; // toggled off mid-flight; drop it
   try {
     speaker.pushAudio(arrayBuf);
+    if (pushFailures.has(userId)) pushFailures.delete(userId);
   } catch (err) {
-    post({ type: 'error', userId, message: `decode failed: ${err.message}` });
+    const n = (pushFailures.get(userId) || 0) + 1;
+    pushFailures.set(userId, n);
+
+    if (n === 1) {
+      post({ type: 'error', userId, message: `decode failed: ${err.message}` });
+      return;
+    }
+    if (n < MAX_PUSH_FAILURES) return; // wait it out without saying so again
+
+    pushFailures.delete(userId);
+    try {
+      speaker.close();
+    } catch {
+      /* already in a bad state */
+    }
+    speakers.delete(userId);
+    post({
+      type: 'error',
+      userId,
+      fatal: true,
+      message:
+        `speech recognition kept failing (${err.message}) and has been stopped ` +
+        `for this speaker — toggle them off and back on to retry`,
+    });
+    post({ type: 'partialCleared', userId });
+    post({ type: 'speakerRemoved', userId, rss: rss() });
   }
 }
 
@@ -345,6 +383,7 @@ function shutdown() {
     clearInterval(idleTimer);
     idleTimer = null;
   }
+  pushFailures.clear();
   for (const userId of [...speakers.keys()]) {
     const speaker = speakers.get(userId);
     try {

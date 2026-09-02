@@ -179,7 +179,7 @@ class ChatterLayerEngine {
           case 'speakerRemoved':
             return this.emit({ type: 'stats', rss: msg.rss, speakers: this.selected.size });
           case 'error':
-            return this.log('warn', `[speech] ${msg.message}`);
+            return this.handleSpeechError(msg);
           default:
             return undefined;
         }
@@ -196,6 +196,18 @@ class ChatterLayerEngine {
         if (code !== 0) lost(`Speech engine exited unexpectedly (code ${code}).`);
       });
     });
+  }
+
+  /**
+   * Relay a worker `error` message. Names the speaker when the id resolves, and
+   * a `fatal` one (that speaker was dropped) is logged as an error and clears
+   * whatever partial was on screen for them.
+   */
+  handleSpeechError(msg) {
+    const who = msg.userId ? this.knownName(msg.userId) || msg.userId : null;
+    const text = who ? `[speech] ${who}: ${msg.message}` : `[speech] ${msg.message}`;
+    this.log(msg.fatal ? 'error' : 'warn', text);
+    if (msg.fatal && msg.userId) this.emit({ type: 'captionCleared', userId: msg.userId });
   }
 
   /**
