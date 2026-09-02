@@ -32,6 +32,10 @@ jobs:
   build:
     name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write # actions/attest-build-provenance
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -39,6 +43,7 @@ jobs:
           - os: windows-latest
             name: Windows
             script: dist:win
+            attest: dist/*.exe
             artifacts: |
               dist/*.exe
               dist/*.exe.blockmap
@@ -46,6 +51,7 @@ jobs:
           - os: macos-latest
             name: macOS
             script: dist:mac
+            attest: dist/*.dmg
             artifacts: |
               dist/*.dmg
               dist/*.dmg.blockmap
@@ -53,6 +59,9 @@ jobs:
           - os: ubuntu-latest
             name: Linux
             script: dist:linux
+            attest: |
+              dist/*.AppImage
+              dist/*.deb
             artifacts: |
               dist/*.AppImage
               dist/*.deb
@@ -90,6 +99,14 @@ jobs:
           # Unsigned builds. Add CSC_LINK / CSC_KEY_PASSWORD (Windows) or
           # macOS signing secrets here when certificates are available.
           CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      # Cryptographic provenance: what built this file, from which commit and
+      # workflow. Free and GitHub-native; `gh attestation verify <file>` checks
+      # it. Does not need a signing certificate.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: ${{ matrix.attest }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
