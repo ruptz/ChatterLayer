@@ -1,0 +1,5 @@
+node_modules/
+dist/
+vendor/
+models/
+package-lock.json

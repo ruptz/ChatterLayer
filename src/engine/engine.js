@@ -27,7 +27,6 @@ const {
   EndBehaviorType,
   VoiceConnectionStatus,
   entersState,
-  getVoiceConnection,
 } = require('@discordjs/voice');
 const prism = require('prism-media');
 

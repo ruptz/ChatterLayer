@@ -7,6 +7,9 @@
   "author": "ruptz",
   "license": "MIT",
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "homepage": "https://github.com/ruptz/ChatterLayer",
   "repository": {
     "type": "git",
@@ -25,6 +28,9 @@
     "dist:win": "electron-builder --win",
     "dist:mac": "electron-builder --mac",
     "dist:linux": "electron-builder --linux",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "selftest": "node scripts/selftest.js"
   },
   "dependencies": {
@@ -40,7 +46,12 @@
   },
   "devDependencies": {
     "electron": "^43.2.0",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^9.1.2",
+    "globals": "^15.15.0",
+    "prettier": "^3.9.6",
+    "typescript": "^5.9.3"
   },
   "overrides": {
     "brace-expansion@1": "^1.1.18",

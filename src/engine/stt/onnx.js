@@ -18,7 +18,6 @@ let ort = null;
 function runtime() {
   if (ort) return ort;
   try {
-    // eslint-disable-next-line global-require
     ort = require('onnxruntime-node');
   } catch (err) {
     throw new Error(

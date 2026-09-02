@@ -35,7 +35,6 @@
  */
 
 const fs = require('fs');
-const path = require('path');
 const os = require('os');
 const { execFileSync } = require('child_process');
 
