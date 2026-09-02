@@ -1,4 +1,5 @@
 'use strict';
+// @ts-check
 /**
  * Discord decodes to 48 kHz stereo; Vosk wants 16 kHz mono.
  *

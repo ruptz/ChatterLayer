@@ -29,6 +29,7 @@
     "dist:mac": "electron-builder --mac",
     "dist:linux": "electron-builder --linux",
     "lint": "eslint .",
+    "typecheck": "tsc -p jsconfig.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "selftest": "node scripts/selftest.js"

@@ -1,4 +1,5 @@
 'use strict';
+// @ts-check
 /**
  * Shared by the main process, the engine child process and the setup script,
  * so nothing here may assume Electron's `app` module exists.

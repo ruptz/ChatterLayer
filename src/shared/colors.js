@@ -1,4 +1,5 @@
 'use strict';
+// @ts-check
 
 // Bright, well-separated hues that all clear WCAG AA against the overlay's
 // dark backdrop — captions are an accessibility feature first.

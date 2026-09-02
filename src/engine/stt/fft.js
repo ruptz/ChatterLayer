@@ -1,4 +1,5 @@
 'use strict';
+// @ts-check
 /**
  * Radix-2 FFT, plus a Bluestein wrapper for lengths that are not a power of two.
  *

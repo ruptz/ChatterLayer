@@ -1,4 +1,5 @@
 'use strict';
+// @ts-check
 /**
  * Turns a continuous stream of audio into utterances, for the engines that need
  * whole utterances.

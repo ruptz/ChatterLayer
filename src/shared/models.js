@@ -1,4 +1,5 @@
 'use strict';
+// @ts-check
 /**
  * Speech model catalogue and downloader.
  *

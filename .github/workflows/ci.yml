@@ -11,6 +11,28 @@ on:
   workflow_dispatch:
 
 jobs:
+  lint:
+    name: Lint and type-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      # tsc --checkJs over the files that opt in with `// @ts-check`. The set
+      # grows as modules are annotated; see jsconfig.json.
+      - name: Type-check
+        run: npm run typecheck
+
   test:
     name: Self test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

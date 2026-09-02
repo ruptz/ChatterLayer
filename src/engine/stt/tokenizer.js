@@ -1,4 +1,5 @@
 'use strict';
+// @ts-check
 /**
  * Detokenisers for the three ONNX engines.
  *
