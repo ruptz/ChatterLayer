@@ -75,13 +75,29 @@ jobs:
           node-version: 22
           cache: npm
 
+      # The update badge compares the running app's version with the newest tag.
+      # v0.0.1–v0.0.5 were built with package.json still at 1.0.0, so anyone on
+      # those never sees an update. A tag that doesn't match package.json fails
+      # here, before anything is built.
+      - name: Check the tag matches package.json
+        if: github.ref_type == 'tag' || inputs.tag
+        shell: bash
+        run: |
+          TAG="${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}"
+          VERSION="v$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "::error::Tag $TAG does not match package.json ($VERSION). Bump the version, then tag."
+            exit 1
+          fi
+          echo "Tag $TAG matches package.json"
+
       - name: Install dependencies
         run: npm ci
 
       - name: Run self test
         run: npm run selftest
 
-      # Speech models are NOT bundled — they are 40 MB to 2.3 GB and the app
+      # Speech models are NOT bundled — they are 40 MB to 2.5 GB and the app
       # downloads the one the user picks on first run. Only the libvosk
       # runtime ships inside the installer.
       - name: Fetch Vosk runtime for this platform
@@ -206,10 +222,11 @@ jobs:
             ### First run
 
             ChatterLayer asks which **speech model** to download — models aren't
-            bundled because they range from 40 MB to 2.3 GB and you only need
-            one. **Medium (~128 MB)** is recommended and right for almost
-            everyone. Models are stored in your user data folder and survive
-            updates.
+            bundled because they range from 40 MB to 2.5 GB and you only need
+            one. It marks the one that suits your PC: **Parakeet TDT 0.6B**
+            (2.5 GB, the most accurate) if you have 16 GB of RAM or more, or
+            **Moonshine Base** (251 MB) on lighter machines. Models are stored
+            in your user data folder and survive updates.
 
             You'll also need a Discord bot token — about two minutes to set up,
             no privileged intents required. See the README.

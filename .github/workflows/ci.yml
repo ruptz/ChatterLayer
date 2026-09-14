@@ -1,12 +1,12 @@
 name: CI
 
 # Fast checks on every push and pull request. Deliberately does NOT download
-# speech models (up to 2.3 GB) or run Electron — see selftest.js for what is
+# speech models (up to 2.5 GB) or run Electron — see selftest.js for what is
 # covered without them.
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, dev]
   pull_request:
   workflow_dispatch:
 
