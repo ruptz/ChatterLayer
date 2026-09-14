@@ -192,7 +192,7 @@ jobs:
             SHA256SUMS
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           # Passed explicitly. Left to the action's default it reads github.ref,
           # which is a branch ref on a manual run and fails with
