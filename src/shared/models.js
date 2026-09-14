@@ -128,17 +128,19 @@ const MODEL_CATALOG = [
     engine: 'moonshine',
     dir: 'moonshine-base-onnx',
     label: 'Moonshine Base',
-    note: 'best all-round, recommended',
+    note: 'recommended for lighter PCs',
     downloadMB: 251,
     ramMB: 550,
     perSpeakerMB: 3,
     maxSpeakers: 6,
-    // Recommended on the measurements rather than on reputation: against Vosk
-    // Medium it is more accurate, adds punctuation and casing, produces a caption
-    // in ~150 ms, costs a tenth of the CPU per second of speech, and uses *less*
-    // memory once more than three people are on (3 MB per extra speaker against
-    // 51 MB). The one thing it gives up is word-by-word immediacy.
-    recommended: true,
+    // The recommendation for machines that can't comfortably hold Parakeet — see
+    // recommendedModelFor(). Chosen on the measurements rather than on
+    // reputation: against Vosk Medium it is more accurate, adds punctuation and
+    // casing, produces a caption in ~150 ms, costs a tenth of the CPU per second
+    // of speech, and uses *less* memory once more than three people are on (3 MB
+    // per extra speaker against 51 MB). The one thing it gives up is word-by-word
+    // immediacy.
+    recommended: 'light',
     blurb:
       'Better accuracy than Vosk Medium, with punctuation, and the fastest here ' +
       'at about 150 ms per caption. Cost scales with the length of the phrase, ' +
@@ -233,15 +235,21 @@ const MODEL_CATALOG = [
     engine: 'parakeet',
     dir: 'parakeet-tdt-0.6b-v2-onnx',
     label: 'Parakeet TDT 0.6B',
-    note: 'best accuracy, very heavy',
+    note: 'best accuracy, recommended',
     downloadMB: 2513,
     ramMB: 2600,
     perSpeakerMB: 3,
     maxSpeakers: 4,
+    // The recommendation for any machine that can hold it, and that is a lower
+    // bar than the download suggests: the weights are loaded once and shared, so
+    // a 16 GB PC — which most streaming PCs are — runs it comfortably. It is the
+    // most accurate model here by a distance, and still ~290 ms per caption on a
+    // Ryzen 5 5600X. recommendedModelFor() decides between it and Moonshine.
+    recommended: 'capable',
     blurb:
-      'Highest accuracy here, and faster per caption than Whisper Base despite ' +
-      'being far larger — it transcribes only the phrase, not a padded window. ' +
-      'The cost is memory: 2.5 GB of weights, loaded once and shared.',
+      'The most accurate model here, and quicker than its size suggests — about ' +
+      '290 ms per caption, because it transcribes only the phrase. Recommended ' +
+      'for any PC with 16 GB of RAM: 2.5 GB of weights, loaded once and shared.',
     files: fromHf(
       'istupakov/parakeet-tdt-0.6b-v2-onnx',
       '0bbb45a3365852604aef28b538a8f066f4ccaa85',
@@ -612,11 +620,65 @@ function removeModel(key, modelsDirPath) {
   return target;
 }
 
+// -------------------------------------------------------- recommendations ---
+
+/** Parakeet's floors — see recommendedModelFor(). */
+const CAPABLE_MIN_RAM_BYTES = 12 * 1024 ** 3;
+const CAPABLE_MIN_THREADS = 6;
+
+/**
+ * Which of the two recommended models suits a machine.
+ *
+ * Parakeet is the better model by a distance, and "can run it" is a lower bar
+ * than its 2.5 GB download suggests: the weights are loaded once and shared, so
+ * what it needs is ~2.6 GB of RAM to spare beside OBS, a game and Discord, and a
+ * CPU with a few cores. A machine sold as 16 GB reports a little under 16 GiB,
+ * so the RAM floor sits at 12 GiB — every 16 GB PC clears it, an 8 GB laptop
+ * doesn't. Both floors are a judgement rather than a benchmark; the app warns
+ * if captions start to lag whichever model is running.
+ *
+ * A machine that reports nothing gets the lighter model, which runs anywhere.
+ *
+ * @param {{ totalMemBytes?: number, cpuThreads?: number }} [machine]
+ * @returns {{ key: string, tier: 'capable' | 'light', limitedBy: 'ram' | 'cpu' | null,
+ *   ramGB: number, cpuThreads: number }}
+ */
+function recommendedModelFor({ totalMemBytes = 0, cpuThreads = 0 } = {}) {
+  const keyFor = (tier) => MODEL_CATALOG.find((m) => m.recommended === tier).key;
+  const ramGB = Math.round(totalMemBytes / 1024 ** 3);
+  const enoughRam = totalMemBytes >= CAPABLE_MIN_RAM_BYTES;
+  const enoughCpu = cpuThreads >= CAPABLE_MIN_THREADS;
+
+  if (enoughRam && enoughCpu) {
+    return { key: keyFor('capable'), tier: 'capable', limitedBy: null, ramGB, cpuThreads };
+  }
+  return {
+    key: keyFor('light'),
+    tier: 'light',
+    limitedBy: enoughRam ? 'cpu' : 'ram',
+    ramGB,
+    cpuThreads,
+  };
+}
+
+/** This machine, in the shape recommendedModelFor() takes. */
+function machineSpecs() {
+  return {
+    totalMemBytes: os.totalmem(),
+    cpuThreads:
+      typeof os.availableParallelism === 'function'
+        ? os.availableParallelism()
+        : os.cpus().length,
+  };
+}
+
 module.exports = {
   MODEL_CATALOG,
   MANIFEST_FILENAME,
   findModel,
   findModelByDir,
+  recommendedModelFor,
+  machineSpecs,
   catalogWithStatus,
   downloadBytes,
   installFootprintBytes,

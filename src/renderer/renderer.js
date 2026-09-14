@@ -734,8 +734,8 @@ function renderModels() {
     opt.textContent = 'No model installed';
     el.model.appendChild(opt);
     el.model.disabled = true;
-    el.modelNote.textContent =
-      'ChatterLayer needs a speech model before it can caption. Choose one below.';
+    // Names the model that suits this PC once the catalogue has arrived.
+    updateModelNote();
     // Nothing works without a model, so open the picker rather than making the
     // user hunt for it.
     el.modelList.hidden = false;
@@ -760,11 +760,55 @@ function renderModels() {
   renderModelPath();
 }
 
+/**
+ * Which of the two recommended models suits this machine, as the main process
+ * judged it from RAM and CPU threads: `{ key, tier, limitedBy, ramGB,
+ * cpuThreads }`. Null until the catalogue arrives.
+ */
+let suggestion = null;
+
+/** The catalogue entry for the suggestion, once both are known. */
+const suggestedModel = () =>
+  (suggestion && catalog.find((m) => m.key === suggestion.key)) || null;
+
+/**
+ * One line above the list that answers "which one?" for this PC, with the
+ * reason — so nobody has to know whether their machine counts as high end.
+ */
+function suggestionLine() {
+  const pick = suggestedModel();
+  if (!pick) return null;
+
+  const li = document.createElement('li');
+  li.className = 'model-suggest';
+  const name = document.createElement('strong');
+  name.textContent = pick.label;
+
+  // The 16 GB and 6-thread figures follow recommendedModelFor() in
+  // src/shared/models.js.
+  const best = catalog.find((m) => m.recommended === 'capable');
+  const bestName = best ? best.label : 'The larger model';
+  let why = ' — the most accurate model here.';
+  if (suggestion.limitedBy === 'ram') {
+    why = `. ${bestName} is more accurate, but wants a PC with 16 GB of RAM.`;
+  } else if (suggestion.limitedBy === 'cpu') {
+    why = `. ${bestName} is more accurate, but needs at least 6 CPU threads to keep up.`;
+  }
+
+  const specs = `${suggestion.ramGB} GB RAM, ${suggestion.cpuThreads} CPU threads`;
+  li.append(`For this PC (${specs}): `, name, why);
+  return li;
+}
+
 /** Catalogue rows: download / installed / remove, with a progress bar. */
 async function renderModelCatalog() {
   const fetched = await window.chatterlayer.modelCatalog();
   catalog = fetched.catalog;
+  suggestion = fetched.suggestion || null;
   el.modelList.replaceChildren();
+
+  const line = suggestionLine();
+  if (line) el.modelList.appendChild(line);
 
   let engine = null;
   for (const m of catalog) {
@@ -781,6 +825,8 @@ async function renderModelCatalog() {
 
     const li = document.createElement('li');
     li.className = `model-row${m.installed ? ' installed' : ''}`;
+    // Lit along its edge like a live strip: the model the line above picked.
+    if (suggestion && m.key === suggestion.key) li.classList.add('suggested');
     li.dataset.model = m.key;
 
     const info = document.createElement('div');
@@ -791,7 +837,8 @@ async function renderModelCatalog() {
     if (m.recommended) {
       const pill = document.createElement('span');
       pill.className = 'pill';
-      pill.textContent = 'Recommended';
+      pill.textContent =
+        m.recommended === 'light' ? 'Recommended for lighter PCs' : 'Recommended';
       title.append(' ', pill);
     }
 
@@ -897,6 +944,18 @@ function onModelProgress(p) {
  * runs out is captions arriving late rather than an error.
  */
 function updateModelNote() {
+  // Nothing installed yet, so there is no selection to describe: point at the
+  // model that suits this PC instead. The first call comes before the catalogue
+  // has arrived; renderModelCatalog() calls back in once it has.
+  if (!(state.models || []).length) {
+    const pick = suggestedModel();
+    el.modelNote.textContent =
+      'ChatterLayer needs a speech model before it can caption. ' +
+      (pick ? `${pick.label} suits this PC — download it below.` : 'Choose one below.');
+    el.modelNote.classList.remove('warn');
+    return;
+  }
+
   const name = modelName(el.model.value);
   const model = byDir(name);
 

@@ -854,6 +854,20 @@ select option {
   color: var(--text-3);
 }
 
+/* One line above the choices that answers "which one?" for this machine. */
+.model-suggest {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.model-suggest strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .model-row {
   position: relative;
   display: flex;
@@ -869,6 +883,11 @@ select option {
 
 .model-row.installed {
   background: rgba(62, 207, 142, 0.04);
+}
+
+/* The model picked for this machine, lit along its edge like a live strip. */
+.model-row.suggested {
+  box-shadow: inset 2px 0 0 var(--live);
 }
 
 .model-info {

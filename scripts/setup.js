@@ -7,7 +7,7 @@
  * download models from inside the app. CI uses `--runtime-only` to fetch just the
  * library before packaging.
  *
- *   node scripts/setup.js                          # the recommended model
+ *   node scripts/setup.js                          # the recommended model for this machine
  *   node scripts/setup.js --model=medium           # a specific model
  *   node scripts/setup.js --model=whisper-base     # any engine
  *   node scripts/setup.js --runtime-only           # libvosk only (used by CI)
@@ -16,9 +16,10 @@
  * Only Vosk needs a separate native runtime, and it is fetched only when the
  * chosen model is a Vosk one. The other three engines run on onnxruntime-node,
  * which arrives as an ordinary npm dependency with prebuilt binaries, so there is
- * nothing to fetch for them beyond the model itself. The recommended model is a
- * Moonshine one, so a bare `npm run setup` no longer brings libvosk down with it —
- * use `--runtime-only` (or ask for a Vosk model) if you want it.
+ * nothing to fetch for them beyond the model itself. Both recommended models —
+ * Parakeet, or Moonshine Base on a lighter machine — are ONNX ones, so a bare
+ * `npm run setup` never brings libvosk down with it. Use `--runtime-only` (or ask
+ * for a Vosk model) if you want it.
  */
 
 const fs = require('fs');
@@ -29,6 +30,8 @@ const extract = require('extract-zip');
 const {
   MODEL_CATALOG,
   findModel,
+  recommendedModelFor,
+  machineSpecs,
   installModel,
   download,
   downloadBytes,
@@ -98,15 +101,23 @@ function findLib(dir, libName) {
   return null;
 }
 
+/** "(recommended…)" after a model's name in --list, if it is one. */
+function recommendationTag(m, pick) {
+  if (!m.recommended) return '';
+  const who = m.recommended === 'light' ? 'recommended for lighter PCs' : 'recommended';
+  return m.key === pick.key ? `  (${who} — suits this machine)` : `  (${who})`;
+}
+
 function listModels() {
   console.log('Available speech models:\n');
+  const pick = recommendedModelFor(machineSpecs());
   let engine = null;
   for (const m of MODEL_CATALOG) {
     if (m.engine !== engine) {
       engine = m.engine;
       console.log(`  ${engine.toUpperCase()}`);
     }
-    const tag = m.recommended ? '  (recommended)' : '';
+    const tag = recommendationTag(m, pick);
     console.log(`    --model=${m.key.padEnd(15)} ${m.label}${tag}`);
     console.log(
       `        ${formatSize(m.downloadMB)} download, ~${formatSize(m.ramMB)} RAM, ` +
@@ -167,7 +178,17 @@ async function main() {
     return;
   }
 
-  const key = arg('model') || MODEL_CATALOG.find((m) => m.recommended).key;
+  // No --model: the recommended model that suits this machine, and say which and
+  // why, so a 2.5 GB download never starts as a surprise.
+  let key = arg('model');
+  if (!key) {
+    const pick = recommendedModelFor(machineSpecs());
+    key = pick.key;
+    console.log(
+      `[model]   No --model given, so ${findModel(key).label}: it suits this ` +
+        `machine (${pick.ramGB} GB RAM, ${pick.cpuThreads} CPU threads).\n`
+    );
+  }
   const model = findModel(key);
   if (!model) {
     console.error(`Unknown model "${key}". Run with --list to see the options.`);

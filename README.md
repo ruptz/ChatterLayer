@@ -62,7 +62,7 @@ Each person in your call gets their own colour and their own caption line:
 |---|---|
 | **OS** | Windows, macOS (Intel or Apple Silicon), or Linux |
 | **Disk** | ~350 MB for the app, plus the speech model you choose (40 MB–2.5 GB) |
-| **RAM** | ~570 MB for a 7-person call on the recommended model |
+| **RAM** | ~2.6 GB on Parakeet, the pick for PCs with 16 GB; ~570 MB for a 7-person call on Moonshine Base, the pick for lighter machines |
 | **A Discord bot** | Free, takes two minutes — [instructions below](#3-create-your-discord-bot) |
 | **OBS** | Any recent version |
 
@@ -102,9 +102,15 @@ bundled with the app because they range from 40 MB to 2.5 GB and you only need
 one.
 
 There are nine, across four speech engines — all of them running entirely on your
-own machine. **Pick Moonshine Base unless you have a reason not to**; it's the
-default the app offers. The one reason you might: Vosk Medium puts words on screen
-as they're spoken rather than a phrase at a time. See
+own machine. The app checks your RAM and CPU and marks the one that suits your PC:
+
+- **Parakeet TDT 0.6B** if it has 16 GB of RAM or more — most streaming PCs do.
+  It's the most accurate model here by a distance.
+- **Moonshine Base** on lighter machines, like an 8 GB laptop. Fast, punctuated,
+  and a 251 MB download.
+
+The one other reason to choose differently: Vosk Medium puts words on screen as
+they're spoken rather than a phrase at a time. See
 [Which speech model should I pick?](#which-speech-model-should-i-pick) for the
 details and the measured numbers.
 
@@ -196,7 +202,10 @@ no cloud calls, whichever one you pick.
 | Whisper Tiny | 43 MB | 420 MB | ~650 ms | 2 | yes |
 | Whisper Base | 79 MB | 700 MB | ~1 s | 1 | yes |
 | Whisper Small | 251 MB | 1.8 GB | ~2.2 s | 1 | yes |
-| Parakeet TDT 0.6B | 2.5 GB | 2.6 GB | ~290 ms | 4 | yes |
+| **Parakeet TDT 0.6B** ⭐ | **2.5 GB** | **2.6 GB** | **~290 ms** | **4** | **yes** |
+
+⭐ Recommended — Parakeet on PCs with 16 GB of RAM or more, Moonshine Base on
+lighter machines. The app works out which one suits yours.
 
 Measured on a Ryzen 5 5600X against real speech — reproduce with
 `npm run bench -- --all --wav=yourfile.wav`. See
@@ -215,18 +224,23 @@ sentence. The caption arrives a fraction of a second later, but it reads like
 writing rather than a transcript. One copy of the model serves everyone, so a
 seventh speaker costs an audio buffer rather than another copy of the weights.
 
-**Recommendations:**
+**Recommendations** — the app checks your RAM and CPU and marks which of the
+first two suits your PC:
 
-- **Moonshine Base is the default, and the right answer for most people.** It
-  beats Vosk Medium on every measured axis except immediacy: more accurate, adds
-  punctuation and casing, produces a caption in ~150 ms, uses a tenth of the CPU
-  per second of speech, and — because it loads one shared model — actually uses
-  *less* memory than Vosk Medium once more than three people are on.
+- **Parakeet TDT 0.6B, if your PC has 16 GB of RAM or more.** That is most
+  streaming PCs; it doesn't take a high-end machine. It is the most accurate
+  model here by a distance, and still quick: ~290 ms per caption on a mid-range
+  Ryzen 5 5600X, because it transcribes only the phrase rather than a padded
+  window. The cost is a 2.5 GB download and ~2.6 GB of RAM, loaded once and
+  shared by everyone in the call.
+- **Moonshine Base on lighter machines**, like an 8 GB laptop or an older CPU.
+  It beats Vosk Medium on every measured axis except immediacy: more accurate,
+  adds punctuation and casing, produces a caption in ~150 ms, uses a tenth of the
+  CPU per second of speech, and — because it loads one shared model — actually
+  uses *less* memory than Vosk Medium once more than three people are on.
 - **Vosk Medium** is the choice if you want text appearing as the words are
   spoken rather than at the end of each phrase. That immediacy is a real
   difference on stream, and it is the only thing it still wins on.
-- **Parakeet TDT 0.6B** is the most accurate here and surprisingly quick, but
-  wants 2.5 GB of download and ~2.6 GB of RAM.
 - **The Whisper models are hard to recommend over Moonshine.** Every Whisper
   caption pays for a padded 30-second window whatever the phrase length, so Tiny
   is slower than its size suggests and Base takes about a second per caption
@@ -661,7 +675,7 @@ no Visual Studio, no Python, no `node-gyp`.
 git clone https://github.com/ruptz/ChatterLayer.git
 cd ChatterLayer
 npm install
-npm run setup     # the recommended model (Moonshine — needs no libvosk)
+npm run setup     # the recommended model for this machine (no libvosk needed)
 npm start
 ```
 

@@ -39,6 +39,8 @@ const {
   installModel,
   removeModel,
   sweepPartials,
+  recommendedModelFor,
+  machineSpecs,
 } = require('../shared/models');
 const { buildFilter, maskText } = require('../shared/wordfilter');
 const { checkForUpdate, RELEASES_PAGE } = require('./updates');
@@ -618,6 +620,9 @@ ipcMain.handle('chatterlayer:modelCatalog', () => ({
   catalog: catalogWithStatus(modelsDir()),
   installed: listModels(),
   modelsDir: modelsDir(),
+  // Which of the two recommended models suits this machine. Worked out from the
+  // OS's own RAM and CPU figures, here, and never sent anywhere.
+  suggestion: recommendedModelFor(machineSpecs()),
 }));
 
 /** Tracks in-flight downloads so the same model can't be fetched twice. */
