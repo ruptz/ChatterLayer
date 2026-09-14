@@ -514,7 +514,24 @@ class ChatterLayerEngine {
     };
   }
 
-  async start({ token, channelId, modelPath }) {
+  /**
+   * Connect: sign in, load the model, join the channel.
+   *
+   * A failure anywhere after the model has loaded — an unknown channel, a join
+   * that times out, a model that never finishes loading — must not leave that
+   * model in memory. Nothing else would free it, and the next Connect would load
+   * a second copy beside it: 2.6 GB a time on Parakeet.
+   */
+  async start(opts) {
+    try {
+      await this._start(opts);
+    } catch (err) {
+      await this.leave({ announce: false });
+      throw err;
+    }
+  }
+
+  async _start({ token, channelId, modelPath }) {
     if (!channelId) throw new Error('No voice channel selected.');
 
     // Sign in before loading the model: a bad token then fails in a couple of

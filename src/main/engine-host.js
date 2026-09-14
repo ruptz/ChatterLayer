@@ -43,12 +43,17 @@ class EngineHost extends EventEmitter {
       this.emit('message', { type: 'log', level: 'error', message: d.toString().trim() })
     );
 
-    // Track the sign-in state the engine reports, so the host and the UI can't
-    // disagree about whether the pickers have a live session behind them.
+    // Track the sign-in and call state the engine reports, so the host and the
+    // UI can't disagree — about whether the pickers have a live session behind
+    // them, or about whether a call is up. A failed Connect or a voice drop ends
+    // the call from the engine's side; stop() already covers the user's side.
     this.child.on('message', (msg) => {
       if (msg.type === 'auth') {
         if (msg.state === 'signed-in') this.signedIn = true;
         else if (msg.state === 'error' || msg.state === 'signed-out') this.signedIn = false;
+      }
+      if (msg.type === 'status' && (msg.state === 'error' || msg.state === 'disconnected')) {
+        this.running = false;
       }
       this.emit('message', msg);
     });

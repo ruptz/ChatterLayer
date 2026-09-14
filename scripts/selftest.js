@@ -249,19 +249,64 @@ test('the ONNX engines share the model rather than copying it per speaker', () =
   }
 });
 
-test('exactly one model is marked recommended', () => {
-  const rec = MODEL_CATALOG.filter((m) => m.recommended);
-  assert.strictEqual(rec.length, 1, `found ${rec.length}`);
+test('two models are recommended: one for most PCs, one for lighter ones', () => {
+  for (const m of MODEL_CATALOG) {
+    assert.ok(
+      m.recommended === undefined || m.recommended === 'capable' || m.recommended === 'light',
+      `${m.key}: unknown recommendation "${m.recommended}"`
+    );
+  }
+  for (const tier of ['capable', 'light']) {
+    const rec = MODEL_CATALOG.filter((m) => m.recommended === tier);
+    assert.strictEqual(rec.length, 1, `found ${rec.length} "${tier}" recommendations`);
+  }
 });
 
-test('the recommended model is one a typical machine can actually run', () => {
+test('the main recommendation earns it, and fits on a 16 GB PC', () => {
+  const rec = MODEL_CATALOG.find((m) => m.recommended === 'capable');
+  const light = MODEL_CATALOG.find((m) => m.recommended === 'light');
+  // Only worth the bigger download if it really is the better model.
+  assert.ok(
+    rankOfDir(rec.dir) < rankOfDir(light.dir),
+    `${rec.label} should rank above ${light.label}`
+  );
+  // Room for it beside OBS, a game and Discord on a 16 GB machine.
+  assert.ok(rec.ramMB <= 4000, `${rec.label} wants ${rec.ramMB} MB of RAM`);
+  assert.ok(rec.maxSpeakers >= 3, `${rec.label} only manages ${rec.maxSpeakers} speakers`);
+});
+
+test('the suggestion follows the machine: 16 GB gets the main pick, 8 GB the lighter', () => {
+  const { recommendedModelFor } = require('../src/shared/models');
+  const GiB = 1024 ** 3;
+  const capable = MODEL_CATALOG.find((m) => m.recommended === 'capable').key;
+  const light = MODEL_CATALOG.find((m) => m.recommended === 'light').key;
+
+  // A PC sold as 16 GB reports a little under 16 GiB, and must still qualify.
+  const desktop = recommendedModelFor({ totalMemBytes: 15.8 * GiB, cpuThreads: 12 });
+  assert.strictEqual(desktop.key, capable);
+  assert.strictEqual(desktop.limitedBy, null);
+  assert.strictEqual(desktop.ramGB, 16);
+
+  const laptop = recommendedModelFor({ totalMemBytes: 7.8 * GiB, cpuThreads: 8 });
+  assert.strictEqual(laptop.key, light);
+  assert.strictEqual(laptop.limitedBy, 'ram');
+
+  const oldCpu = recommendedModelFor({ totalMemBytes: 32 * GiB, cpuThreads: 4 });
+  assert.strictEqual(oldCpu.key, light);
+  assert.strictEqual(oldCpu.limitedBy, 'cpu');
+
+  // A machine that reports nothing gets the model that runs anywhere.
+  assert.strictEqual(recommendedModelFor().key, light);
+});
+
+test('the lighter recommendation is one a modest machine can actually run', () => {
   // This used to name a specific model, which meant it went stale the moment the
-  // benchmarks disagreed with it. What matters is not which model is recommended
-  // but that the default download is defensible: it has to keep up with a real
-  // call and not be a multi-gigabyte surprise on someone's connection.
-  const rec = MODEL_CATALOG.find((m) => m.recommended);
+  // benchmarks disagreed with it. What matters is not which model it is but that
+  // the fallback is defensible: it has to keep up with a real call on an 8 GB
+  // laptop and not be a multi-gigabyte surprise on someone's connection.
+  const rec = MODEL_CATALOG.find((m) => m.recommended === 'light');
   assert.ok(rec.maxSpeakers >= 5, `${rec.label} only manages ${rec.maxSpeakers} speakers`);
-  assert.ok(rec.downloadMB <= 500, `${rec.label} is a ${rec.downloadMB} MB default download`);
+  assert.ok(rec.downloadMB <= 500, `${rec.label} is a ${rec.downloadMB} MB download`);
   assert.ok(rec.ramMB <= 1500, `${rec.label} wants ${rec.ramMB} MB of RAM`);
   // And it should be at least as good as everything lighter than it.
   for (const m of MODEL_CATALOG) {
@@ -527,6 +572,56 @@ test('a NeMo vocab.txt decodes with metaspace word boundaries (Parakeet)', () =>
   assert.strictEqual(detok.decode([1, 2, 3]), 'hello world');
   // The blank is never emitted by the search, but must not survive if it is.
   assert.strictEqual(detok.decode([1, 4]), 'hello');
+});
+
+// --- engine --------------------------------------------------------------
+
+console.log('\nengine');
+
+testAsync('a failed Connect releases the model it loaded', async () => {
+  // engine.js hooks process-level events when it loads. Take those hooks back
+  // off, or they would swallow this test runner's own errors.
+  const events = ['message', 'uncaughtException', 'unhandledRejection'];
+  const before = new Map(events.map((ev) => [ev, process.listeners(ev)]));
+  const { ChatterLayerEngine } = require('../src/engine/engine');
+  for (const ev of events) {
+    for (const l of process.listeners(ev)) {
+      if (!before.get(ev).includes(l)) process.removeListener(ev, l);
+    }
+  }
+
+  const engine = new ChatterLayerEngine(() => {});
+  engine.signIn = async () => {};
+  const workers = [];
+  engine.startWorker = async function () {
+    const worker = {
+      messages: [],
+      postMessage(m) {
+        this.messages.push(m);
+      },
+      terminate() {},
+    };
+    workers.push(worker);
+    this.worker = worker;
+    this.workerReady = true;
+  };
+  // The channel lookup fails after the model has loaded: the path that leaked.
+  engine.client = { channels: { fetch: async () => null } };
+
+  for (let i = 0; i < 3; i++) {
+    await assert.rejects(
+      engine.start({ token: 't', channelId: '1', modelPath: 'm' }),
+      /Could not find channel/
+    );
+  }
+  assert.strictEqual(workers.length, 3);
+  assert.strictEqual(engine.worker, null, 'the engine still holds a worker after a failed Connect');
+  for (const worker of workers) {
+    assert.ok(
+      worker.messages.some((m) => m.type === 'shutdown'),
+      'a model loaded for a failed Connect was never released'
+    );
+  }
 });
 
 // --- renderer wiring -----------------------------------------------------
