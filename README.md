@@ -3,6 +3,8 @@
 Live, colour-coded captions for your Discord voice call, rendered straight into
 OBS.
 
+**[chatterlayer.com](https://chatterlayer.com)** — what it does, in one page.
+
 Built for streamers who hang out in Discord calls and want viewers to know
 **who said what** — including viewers who are deaf or hard of hearing, watching
 muted at work, or on a connection that's chewing up your audio.

@@ -10,7 +10,7 @@
   "engines": {
     "node": ">=22"
   },
-  "homepage": "https://github.com/ruptz/ChatterLayer",
+  "homepage": "https://chatterlayer.com",
   "repository": {
     "type": "git",
     "url": "https://github.com/ruptz/ChatterLayer.git"
