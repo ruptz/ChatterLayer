@@ -38,7 +38,7 @@ const nodeRules = {
 };
 
 module.exports = [
-  { ignores: ['node_modules/', 'dist/', 'vendor/', 'models/', 'build/'] },
+  { ignores: ['node_modules/', 'dist/', 'vendor/', 'models/', 'build/', 'site/'] },
   nodeRules,
   {
     // The renderer and the OBS overlay run in a browser, not Node.
