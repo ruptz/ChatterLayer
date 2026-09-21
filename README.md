@@ -1196,7 +1196,7 @@ gh attestation verify ChatterLayer-*-Setup.exe --repo ruptz/ChatterLayer
 ### Local builds
 
 ```bash
-npm run icon                       # regenerate build/icon.png from the logo
+npm run icon                       # regenerate build/icon.png from build/icon.svg
 npm run setup -- --runtime-only    # fetch libvosk (required before packaging)
 npm run pack                       # unpacked build — fast, for testing
 npm run dist:win                   # real installer + portable exe

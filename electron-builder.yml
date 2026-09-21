@@ -16,9 +16,11 @@ files:
   - src/**/*
   - web/**/*
   - package.json
-  # buildResources otherwise stays outside the app. The tray loads this one at
-  # runtime, so it has to be inside the asar as well as being the build icon.
+  # buildResources otherwise stays outside the app. The tray loads icon.png and
+  # the window header shows icon.svg, both at runtime, so they have to be
+  # inside the asar as well as icon.png being the build icon.
   - build/icon.png
+  - build/icon.svg
   - '!**/*.map'
   - '!**/{.DS_Store,Thumbs.db}'
 

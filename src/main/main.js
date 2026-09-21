@@ -196,13 +196,18 @@ function renderTray() {
   );
 }
 
+/**
+ * The app icon, shared by the tray and the window. Packaged from the asar;
+ * `build/icon.png` is listed in electron-builder's `files` for exactly this
+ * reason. Generated from build/icon.svg by scripts/make-icon.js.
+ */
+const ICON_PATH = path.join(__dirname, '..', '..', 'build', 'icon.png');
+
 function createTray() {
-  // Packaged from the asar; `build/icon.png` is listed in electron-builder's
-  // `files` for exactly this reason. A missing file yields an empty image
-  // rather than throwing, which would leave an invisible but working icon —
-  // so fall back to the window icon instead of shipping a blank tray slot.
-  const iconPath = path.join(__dirname, '..', '..', 'build', 'icon.png');
-  let image = nativeImage.createFromPath(iconPath);
+  // A missing file yields an empty image rather than throwing, which would
+  // leave an invisible but working icon — so fall back to the window icon
+  // instead of shipping a blank tray slot.
+  let image = nativeImage.createFromPath(ICON_PATH);
   if (!image.isEmpty()) {
     // Windows draws the tray at 16pt; handing it a 512px PNG gets a blurry
     // downscale. resize() picks the right one at the current DPI.
@@ -223,6 +228,10 @@ function createWindow() {
     minWidth: 900,
     minHeight: 640,
     title: 'ChatterLayer',
+    // Without this, `npm start` shows electron.exe's icon on the taskbar and
+    // title bar. An installed build shows the same picture either way: the icon
+    // electron-builder embeds in the exe is made from this same file.
+    icon: ICON_PATH,
     backgroundColor: '#191b1a', // matches --chassis so launch doesn't flash
     show: false,
     webPreferences: {
