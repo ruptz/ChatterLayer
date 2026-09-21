@@ -22,3 +22,17 @@ updates:
     directory: /
     schedule:
       interval: weekly
+
+  # The site is a Next.js app on the public internet, so it gets watched even
+  # though it ships no binaries. Its lockfile is separate from the app's.
+  - package-ecosystem: npm
+    directory: /site
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      dev-minor-patch:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch

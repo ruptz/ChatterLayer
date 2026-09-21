@@ -367,6 +367,118 @@ test('dropdown labels carry a name, a size and a short note', () => {
   }
 });
 
+// --- the website's copy of the model table -------------------------------
+//
+// site/lib/content.ts is hand-written on purpose: "Every word on the site lives
+// here" is the rule that file opens with, and generating half its rows from the
+// catalogue would leave a table where some cells are editable and some aren't.
+// So the numbers are typed twice, and this is what stops the second copy
+// drifting -- a catalogue change that contradicts the site fails the PR instead
+// of shipping a page that lies about the app.
+
+const SITE_CONTENT = path.join(__dirname, '..', 'site', 'lib', 'content.ts');
+
+/** The site's `models` array, pulled out of its TypeScript as plain objects. */
+function readSiteModels() {
+  const src = fs.readFileSync(SITE_CONTENT, 'utf8');
+  const start = src.indexOf('export const models: Model[] = [');
+  assert.ok(start !== -1, 'site/lib/content.ts has no `export const models: Model[]`');
+  const open = src.indexOf('[', start);
+  const end = src.indexOf('\n];', open);
+  assert.ok(end !== -1, 'the site models array is not closed by a line-leading `];`');
+  // Inside the brackets it's object literals of strings and booleans with no
+  // type syntax, so evaluating it beats scraping nine entries with regexes.
+  return new Function(`return ${src.slice(open, end + 2)}`)();
+}
+
+/**
+ * A size the way the site writes it -- '40 MB', '1.8 GB', '~5 GB', or the
+ * leading figure of '170 MB + 12/speaker' -- in MB, with the slack its own
+ * rounding earns it. '2.5 GB' is allowed to stand for 2513 MB. It is not
+ * allowed to stand for 2600.
+ */
+function parseSize(text, field) {
+  const m = /(\d+(?:\.\d+)?)\s*(MB|GB)/.exec(text);
+  assert.ok(m, `${field} "${text}" has no size in it`);
+  const scale = m[2] === 'GB' ? 1000 : 1;
+  const decimals = (m[1].split('.')[1] || '').length;
+  return { mb: Number(m[1]) * scale, tolerance: scale / 10 ** decimals / 2 };
+}
+
+console.log('\nwebsite model table');
+
+test('the site lists exactly the catalogue’s models', () => {
+  const site = readSiteModels()
+    .map((m) => m.name)
+    .sort();
+  const app = MODEL_CATALOG.map((m) => m.label).sort();
+  // Order is the site's own business; membership isn't.
+  assert.deepStrictEqual(
+    site,
+    app,
+    'the site and MODEL_CATALOG disagree on which models exist'
+  );
+});
+
+test('every figure in the site’s table matches the catalogue', () => {
+  for (const row of readSiteModels()) {
+    const m = MODEL_CATALOG.find((x) => x.label === row.name);
+    assert.ok(m, `${row.name} is not in the catalogue`);
+
+    assert.strictEqual(
+      row.engine.toLowerCase(),
+      m.engine,
+      `${row.name}: the site says the ${row.engine} engine, the catalogue says ${m.engine}`
+    );
+
+    const dl = parseSize(row.download, `${row.name}: download`);
+    assert.ok(
+      Math.abs(dl.mb - m.downloadMB) <= dl.tolerance,
+      `${row.name}: the site says ${row.download}, the catalogue says ${m.downloadMB} MB`
+    );
+
+    const ram = parseSize(row.ram, `${row.name}: ram`);
+    assert.ok(
+      Math.abs(ram.mb - m.ramMB) <= ram.tolerance,
+      `${row.name}: the site says ${row.ram}, the catalogue says ${m.ramMB} MB`
+    );
+
+    // Only the rows where it matters spell the per-speaker cost out. Those that
+    // do have to be right; those that don't are an editorial choice.
+    const per = /\+\s*(\d+)\s*\/\s*speaker/.exec(row.ram);
+    if (per) {
+      assert.strictEqual(
+        Number(per[1]),
+        m.perSpeakerMB,
+        `${row.name}: the site says ${per[1]} MB per speaker, the catalogue says ${m.perSpeakerMB}`
+      );
+    }
+
+    assert.strictEqual(
+      Number(row.speakers),
+      m.maxSpeakers,
+      `${row.name}: the site says ${row.speakers} speakers, the catalogue says ${m.maxSpeakers}`
+    );
+
+    // Punctuation follows from the engine: only Vosk streams bare lowercase.
+    assert.strictEqual(
+      row.punctuation,
+      m.engine !== 'vosk',
+      `${row.name}: the site says punctuation ${row.punctuation}, but it runs on ${m.engine}`
+    );
+
+    assert.strictEqual(
+      Boolean(row.recommended),
+      Boolean(m.recommended),
+      `${row.name}: the site and the app disagree about whether this one is recommended`
+    );
+  }
+});
+
+// The caption delay column has no catalogue counterpart on purpose -- the app
+// never shows a per-model delay, so adding the field to MODEL_CATALOG would be
+// carrying data for the website's benefit alone. It stays hand-written.
+
 // --- speech front end ----------------------------------------------------
 
 const { Radix2, Dft } = require('../src/engine/stt/fft');
