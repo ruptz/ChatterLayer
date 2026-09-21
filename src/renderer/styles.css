@@ -74,39 +74,16 @@ body {
   gap: 11px;
 }
 
-/* Three stacked bars — captions, layered. Monochrome on purpose: the palette
-   is reserved for speaker identity. */
+/* The app icon (build/icon.svg). Greys only on purpose: the palette is
+   reserved for speaker identity. Its rounded tile is baked into the file, so
+   no border or background here. 32px, not 30: the icon is drawn on a grid
+   that puts every edge on a whole pixel at 32px, and at other sizes the
+   edges fall between pixels and blur. */
 .logo {
-  width: 30px;
-  height: 30px;
-  border-radius: var(--r-md);
-  border: 1px solid var(--border-strong);
-  background: var(--raised);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 3px;
-  flex: none;
-}
-
-.logo i {
   display: block;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--text);
-}
-.logo i:nth-child(1) {
-  width: 14px;
-  opacity: 0.95;
-}
-.logo i:nth-child(2) {
-  width: 9px;
-  opacity: 0.6;
-}
-.logo i:nth-child(3) {
-  width: 12px;
-  opacity: 0.35;
+  width: 32px;
+  height: 32px;
+  flex: none;
 }
 
 .brand-text strong {

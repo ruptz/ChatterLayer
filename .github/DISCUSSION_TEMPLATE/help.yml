@@ -1,0 +1,54 @@
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never paste your Discord bot token here.** It's the one secret in the
+        whole setup. If it has already been pasted somewhere public, press
+        **Reset Token** in the Discord Developer Portal — the old one stops
+        working the moment you do.
+
+        Most setup trouble is one of the cases in
+        [Troubleshooting](https://github.com/ruptz/ChatterLayer#troubleshooting) —
+        an empty server dropdown, a greyed-out channel, a blank overlay in OBS,
+        or nobody switched on in the Channels panel. Worth a look first.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: What are you stuck on
+      description: Where you got to in the setup steps, and what you see instead of what you expected.
+      placeholder: |
+        I'm on step 4. The token pasted fine and it says "Signed in as
+        CaptionBot#4417", but the Server dropdown says "No servers with voice
+        channels" even though the bot shows up in my member list.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The stamp in the top-right of the control panel.
+      placeholder: '0.3.0'
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Linux
+
+  - type: textarea
+    id: log
+    attributes:
+      label: The Log panel, if you've got that far
+      description: |
+        It names each stage of a connect, so it usually says where things
+        stopped. Your token is never written to it, but Discord display names
+        are, so trim those if you'd rather.
+      render: text

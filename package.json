@@ -1,7 +1,7 @@
 {
   "name": "chatterlayer",
   "productName": "ChatterLayer",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Live, colour-coded Discord voice captions for OBS. Free, offline, fully local.",
   "main": "src/main/main.js",
   "author": "ruptz",
@@ -19,6 +19,7 @@
     "start": "electron .",
     "setup": "node scripts/setup.js",
     "icon": "node scripts/make-icon.js",
+    "hash-models": "node scripts/hash-models.js",
     "test:vosk": "node scripts/test-vosk.js",
     "test:stt": "node scripts/test-stt.js",
     "bench": "node --expose-gc scripts/bench.js",

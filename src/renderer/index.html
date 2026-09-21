@@ -12,7 +12,11 @@
   <body>
     <header class="topbar">
       <div class="brand">
-        <span class="logo" aria-hidden="true"><i></i><i></i><i></i></span>
+        <!-- The app icon itself rather than a redraw, so the two can't drift.
+             The SVG, not icon.png: a 512px bitmap shrunk to 32px smears every
+             edge. It ships inside the asar (electron-builder.yml), so this
+             path holds in the packaged app too. -->
+        <img class="logo" src="../../build/icon.svg" alt="" aria-hidden="true" />
         <span class="brand-text">
           <strong>ChatterLayer</strong>
           <small>Voice captioning for OBS</small>
@@ -111,8 +115,9 @@
               <label class="label" for="guild">Server</label>
               <div class="input-row">
                 <select id="guild"></select>
+                <!-- Becomes "Refresh" once signed in; renderAuth() owns it. -->
                 <button type="button" class="btn btn-sm" id="refresh-guilds">
-                  Refresh
+                  Sign in
                 </button>
               </div>
               <p class="help" id="auth-note">Signing in&hellip;</p>

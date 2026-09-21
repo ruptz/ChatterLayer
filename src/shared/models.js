@@ -58,11 +58,26 @@ const hf = (repo, revision) => `https://huggingface.co/${repo}/resolve/${revisio
  */
 const MODEL_CATALOG = [
   // ------------------------------------------------------------------ Vosk --
+  // These four are checked by `bytes` plus a hash of the archive. Where the hash
+  // is `sha256` it was computed here from a real download; where it is `md5` it
+  // is upstream's own published figure from
+  // https://alphacephei.com/vosk/models/model-list.json, taken on 2026-09-17
+  // because hashing the archive ourselves would mean a 4.1 GB download for two
+  // models nothing recommends. That list was checked against real downloads of
+  // Small and Medium on the same day and both its md5 and its size were exact,
+  // which is the evidence for trusting the other two entries.
+  //
+  // md5 is the weaker guarantee: it catches a corrupt transfer, but MD5 is
+  // collision-broken, so it is not proof against a deliberately swapped archive
+  // the way sha256 is. Any of these earns a real sha256 the first time someone
+  // installs it and runs `npm run hash-models` — prefer that over the md5.
   {
     key: 'small',
     engine: 'vosk',
     dir: 'vosk-model-small-en-us-0.15',
     url: `${VOSK_BASE}/vosk-model-small-en-us-0.15.zip`,
+    bytes: 41205931,
+    sha256: '30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498',
     label: 'Vosk Small',
     note: 'fastest, lowest accuracy',
     downloadMB: 40,
@@ -77,6 +92,8 @@ const MODEL_CATALOG = [
     engine: 'vosk',
     dir: 'vosk-model-en-us-0.22-lgraph',
     url: `${VOSK_BASE}/vosk-model-en-us-0.22-lgraph.zip`,
+    bytes: 130557655,
+    sha256: 'd9838b4aaa82a75c4a17f5aca300eaca129aaab2a7cbf951bafbb500eb9c4334',
     label: 'Vosk Medium',
     note: 'live word-by-word, no punctuation',
     downloadMB: 128,
@@ -96,6 +113,8 @@ const MODEL_CATALOG = [
     engine: 'vosk',
     dir: 'vosk-model-en-us-0.22',
     url: `${VOSK_BASE}/vosk-model-en-us-0.22.zip`,
+    bytes: 1913365522,
+    md5: '228741ed058893e403dce60bdd659f42',
     label: 'Vosk Large',
     note: 'high accuracy, heavy',
     downloadMB: 1800,
@@ -110,6 +129,8 @@ const MODEL_CATALOG = [
     engine: 'vosk',
     dir: 'vosk-model-en-us-0.42-gigaspeech',
     url: `${VOSK_BASE}/vosk-model-en-us-0.42-gigaspeech.zip`,
+    bytes: 2423807363,
+    md5: 'db1202c15b40ea4b1ec27b85a90dffbe',
     label: 'Vosk Gigaspeech',
     note: 'best Vosk accuracy, very heavy',
     downloadMB: 2300,
@@ -145,14 +166,48 @@ const MODEL_CATALOG = [
       'Better accuracy than Vosk Medium, with punctuation, and the fastest here ' +
       'at about 150 ms per caption. Cost scales with the length of the phrase, ' +
       'so short replies are nearly free.',
-    files: fromHf('onnx-community/moonshine-base-ONNX', 'b1e9b6aae3c3c7298f10c3798393fdf38e8fbbad', [
-      ['onnx/encoder_model.onnx', 'encoder_model.onnx', 80818781],
-      ['onnx/decoder_model_merged.onnx', 'decoder_model_merged.onnx', 166211345],
-      ['config.json', 'config.json', 922],
-      ['generation_config.json', 'generation_config.json', 147],
-      ['preprocessor_config.json', 'preprocessor_config.json', 128],
-      ['tokenizer.json', 'tokenizer.json', 3761754],
-    ]),
+    files: fromHf(
+      'onnx-community/moonshine-base-ONNX',
+      'b1e9b6aae3c3c7298f10c3798393fdf38e8fbbad',
+      [
+        [
+          'onnx/encoder_model.onnx',
+          'encoder_model.onnx',
+          80818781,
+          '153e128e7abd64a74ee47f2c3f585c3171c4d46cbb368b032827934c4e01e779',
+        ],
+        [
+          'onnx/decoder_model_merged.onnx',
+          'decoder_model_merged.onnx',
+          166211345,
+          '58778763ca8438963190244d6b26572bdca2cedec56a4b91e828f3f2d69ef3c5',
+        ],
+        [
+          'config.json',
+          'config.json',
+          922,
+          'fab7241d1e9fc6c2370c4c6dfb5da79bb54d67ed9ab6b507ac51d29d2abe01d1',
+        ],
+        [
+          'generation_config.json',
+          'generation_config.json',
+          147,
+          'f9b3f711b57be7def2e50a8942f64f36ee0a55fad5b84ff93a687b6c5bcc1d44',
+        ],
+        [
+          'preprocessor_config.json',
+          'preprocessor_config.json',
+          128,
+          'fa43a7017ef85cd1d0fba0d9aae77c8adb16990ae6f11115631f41ec5d8aa679',
+        ],
+        [
+          'tokenizer.json',
+          'tokenizer.json',
+          3761754,
+          '7b913404bdd039af4756783218af4440bc07fb7d6d8258d677e34f95b3ec416f',
+        ],
+      ]
+    ),
   },
 
   // --------------------------------------------------------------- Whisper --
@@ -174,12 +229,42 @@ const MODEL_CATALOG = [
       'its size suggests: every Whisper caption pays for a padded 30-second ' +
       'window however short the phrase was.',
     files: fromHf('Xenova/whisper-tiny.en', '79fb389fc764e7c395bd330e9531d9d32ada7049', [
-      ['onnx/encoder_model_quantized.onnx', 'encoder_model.onnx', 10124913],
-      ['onnx/decoder_model_merged_quantized.onnx', 'decoder_model_merged.onnx', 30727382],
-      ['config.json', 'config.json', 2202],
-      ['generation_config.json', 'generation_config.json', 1590],
-      ['preprocessor_config.json', 'preprocessor_config.json', 339],
-      ['tokenizer.json', 'tokenizer.json', 2128494],
+      [
+        'onnx/encoder_model_quantized.onnx',
+        'encoder_model.onnx',
+        10124913,
+        '8cc3c6f8563d1b3fbd2c5af9f64c2bed8b020bc593c402d1ef53b9f08fbf1b90',
+      ],
+      [
+        'onnx/decoder_model_merged_quantized.onnx',
+        'decoder_model_merged.onnx',
+        30727382,
+        'dbb2e063b7fbc41d9803b9698f93ecb035c50cbb3fb87b56cb131e4a5eb99059',
+      ],
+      [
+        'config.json',
+        'config.json',
+        2202,
+        '37a1073be00d19118c06557896c7c148598f4d8277edc0f5bc07c9f5554839f1',
+      ],
+      [
+        'generation_config.json',
+        'generation_config.json',
+        1590,
+        '132c95ba9db45f4498f2eab3fea7c1d6a174005010f8f6b7d20cfd5e9795996b',
+      ],
+      [
+        'preprocessor_config.json',
+        'preprocessor_config.json',
+        339,
+        'a6a76d28c93edb273669eb9e0b0636a2bddbb1272c3261e47b7ca6dfdbac1b8d',
+      ],
+      [
+        'tokenizer.json',
+        'tokenizer.json',
+        2128494,
+        'c6ee8f089220a5b1188f6426456772572671c6141ae007eecb83c6a8349f5deb',
+      ],
     ]),
   },
   {
@@ -197,12 +282,42 @@ const MODEL_CATALOG = [
       'Good accuracy with punctuation and casing, but about a second per ' +
       'caption — Moonshine Base is more accurate and six times quicker.',
     files: fromHf('Xenova/whisper-base.en', '95bf40a508535962c6483ead40270b2e32267508', [
-      ['onnx/encoder_model_quantized.onnx', 'encoder_model.onnx', 23200856],
-      ['onnx/decoder_model_merged_quantized.onnx', 'decoder_model_merged.onnx', 53707027],
-      ['config.json', 'config.json', 2202],
-      ['generation_config.json', 'generation_config.json', 1500],
-      ['preprocessor_config.json', 'preprocessor_config.json', 339],
-      ['tokenizer.json', 'tokenizer.json', 2128494],
+      [
+        'onnx/encoder_model_quantized.onnx',
+        'encoder_model.onnx',
+        23200856,
+        'd0d4e59e2842617b39787cece73d7e8f76f99b1697d3386c0e682eca2269f4a1',
+      ],
+      [
+        'onnx/decoder_model_merged_quantized.onnx',
+        'decoder_model_merged.onnx',
+        53707027,
+        'a25afc5858a20aabb7652cb2d555996ebe10691a69bbdb423d5073d52f060325',
+      ],
+      [
+        'config.json',
+        'config.json',
+        2202,
+        '5c390f2c6ba84ddeb7e362cd8b2123832911407850174e64d7081ccc36df2d64',
+      ],
+      [
+        'generation_config.json',
+        'generation_config.json',
+        1500,
+        '1e57ed56ad1bd7f08a49ece7fe7daada674573805a35f8bdbbe68380aab5b1ee',
+      ],
+      [
+        'preprocessor_config.json',
+        'preprocessor_config.json',
+        339,
+        'a6a76d28c93edb273669eb9e0b0636a2bddbb1272c3261e47b7ca6dfdbac1b8d',
+      ],
+      [
+        'tokenizer.json',
+        'tokenizer.json',
+        2128494,
+        'c6ee8f089220a5b1188f6426456772572671c6141ae007eecb83c6a8349f5deb',
+      ],
     ]),
   },
   {
@@ -219,12 +334,42 @@ const MODEL_CATALOG = [
       'The most accurate Whisper here, and much the slowest: over 2 seconds ' +
       'per caption on a mid-range CPU.',
     files: fromHf('Xenova/whisper-small.en', 'fa16a75f5d91e83ecb6a2ccb690f14d91ef00ca4', [
-      ['onnx/encoder_model_quantized.onnx', 'encoder_model.onnx', 92324819],
-      ['onnx/decoder_model_merged_quantized.onnx', 'decoder_model_merged.onnx', 156780181],
-      ['config.json', 'config.json', 2208],
-      ['generation_config.json', 'generation_config.json', 1900],
-      ['preprocessor_config.json', 'preprocessor_config.json', 339],
-      ['tokenizer.json', 'tokenizer.json', 2128494],
+      [
+        'onnx/encoder_model_quantized.onnx',
+        'encoder_model.onnx',
+        92324819,
+        'dd37efa07dad7619592ef849a40317dcfd182a2e632275a53a023f02f685cfa7',
+      ],
+      [
+        'onnx/decoder_model_merged_quantized.onnx',
+        'decoder_model_merged.onnx',
+        156780181,
+        '7cff5df61a1809654a5e62d89cbb99e8231b229f41412ab626a1d8fff77397ab',
+      ],
+      [
+        'config.json',
+        'config.json',
+        2208,
+        'afddc76e1d6b2e13e5a85a385d55d272ed61f6797d7d32895492620387336cf6',
+      ],
+      [
+        'generation_config.json',
+        'generation_config.json',
+        1900,
+        'dde54f4ed982cf4f57450f2d23eb5f97dd64dbc390c66a635a34a57e965b16a7',
+      ],
+      [
+        'preprocessor_config.json',
+        'preprocessor_config.json',
+        339,
+        'a6a76d28c93edb273669eb9e0b0636a2bddbb1272c3261e47b7ca6dfdbac1b8d',
+      ],
+      [
+        'tokenizer.json',
+        'tokenizer.json',
+        2128494,
+        'c6ee8f089220a5b1188f6426456772572671c6141ae007eecb83c6a8349f5deb',
+      ],
     ]),
   },
 
@@ -254,14 +399,44 @@ const MODEL_CATALOG = [
       'istupakov/parakeet-tdt-0.6b-v2-onnx',
       '0bbb45a3365852604aef28b538a8f066f4ccaa85',
       [
-        ['encoder-model.onnx', 'encoder-model.onnx', 41770866],
+        [
+          'encoder-model.onnx',
+          'encoder-model.onnx',
+          41770866,
+          '3987bcd28175d829d12888a996a84e8f62a0e374d9ffd640662c1515adc679d3',
+        ],
         // The weights live outside the graph. The filename is recorded inside
         // encoder-model.onnx, so it must land beside it under exactly this name.
-        ['encoder-model.onnx.data', 'encoder-model.onnx.data', 2435420160],
-        ['decoder_joint-model.onnx', 'decoder_joint-model.onnx', 35792059],
-        ['nemo128.onnx', 'nemo128.onnx', 139764],
-        ['vocab.txt', 'vocab.txt', 9384],
-        ['config.json', 'config.json', 97],
+        [
+          'encoder-model.onnx.data',
+          'encoder-model.onnx.data',
+          2435420160,
+          '4dab7362d4874d85965045b1e41b2d61dd2cc0fb25671a7f6b3dc47bf120cc41',
+        ],
+        [
+          'decoder_joint-model.onnx',
+          'decoder_joint-model.onnx',
+          35792059,
+          'cbb52a07bd70ab5b67f8439d4b3cd8704b18467b4430bcacb5adabe154b8d191',
+        ],
+        [
+          'nemo128.onnx',
+          'nemo128.onnx',
+          139764,
+          'a9fde1486ebfcc08f328d75ad4610c67835fea58c73ba57e3209a6f6cf019e9f',
+        ],
+        [
+          'vocab.txt',
+          'vocab.txt',
+          9384,
+          'ec182b70dd42113aff6c5372c75cac58c952443eb22322f57bbd7f53977d497d',
+        ],
+        [
+          'config.json',
+          'config.json',
+          97,
+          '666903c76b9798caf2c210afd4f6cd60b08a8dbf9800ec8d7a3bc0d2148ac466',
+        ],
       ]
     ),
   },
@@ -271,8 +446,18 @@ const MODEL_CATALOG = [
  * @param {[string, string, number, string?][]} entries
  *   [remote path, local name, bytes, sha256?]. The revision pin already stops
  *   the upstream content changing under us; the optional sha256 is a stronger
- *   check than byte length against a truncated or corrupted download. Fill them
- *   in from an installed model with `sha256sum` / `certutil -hashfile`.
+ *   check than byte length against a truncated or corrupted download, and it is
+ *   what makes reusing an already-present file at the top of installFiles() safe
+ *   rather than a guess from its size.
+ *
+ *   Bumping a revision invalidates the bytes and the hashes with it, and all
+ *   three have to move in the same commit: a new revision against old hashes
+ *   fails every user's download with "the download is corrupt", which is a lie
+ *   and worse than having no hashes at all. Regenerate them by deleting the
+ *   model from `models/` (installModel() short-circuits on the manifest), asking
+ *   the app to download it again, and hashing what lands —
+ *   `certutil -hashfile <file> SHA256` per file, or
+ *   `node scripts/hash-models.js` for the whole catalogue.
  */
 function fromHf(repo, revision, entries) {
   const base = hf(repo, revision);
@@ -285,13 +470,15 @@ function fromHf(repo, revision, entries) {
 }
 
 /**
- * Lowercase hex SHA-256 of a file, streamed — the largest model file is 2.4 GB,
+ * Lowercase hex digest of a file, streamed — the largest model file is 2.4 GB,
  * past what a single Buffer can hold.
+ * @param {string} filePath
+ * @param {'sha256'|'md5'} algo
  * @returns {Promise<string>}
  */
-function sha256File(filePath) {
+function hashFile(filePath, algo) {
   return new Promise((resolve, reject) => {
-    const hash = crypto.createHash('sha256');
+    const hash = crypto.createHash(algo);
     const stream = fs.createReadStream(filePath);
     stream.on('error', reject);
     stream.on('data', (chunk) => hash.update(chunk));
@@ -299,8 +486,15 @@ function sha256File(filePath) {
   });
 }
 
+/** @returns {Promise<string>} */
+function sha256File(filePath) {
+  return hashFile(filePath, 'sha256');
+}
+
 function findModel(key) {
-  return MODEL_CATALOG.find((m) => m.key === key || (m.aliases || []).includes(key)) || null;
+  return (
+    MODEL_CATALOG.find((m) => m.key === key || (m.aliases || []).includes(key)) || null
+  );
 }
 
 /** The catalogue entry a given installed directory name belongs to. */
@@ -311,7 +505,10 @@ function findModelByDir(dir) {
 /** Total bytes the download will move, for an honest progress bar. */
 function downloadBytes(model) {
   if (model.files) return model.files.reduce((sum, f) => sum + f.bytes, 0);
-  return model.downloadMB * 1e6; // zip entries have no per-file manifest
+  // `bytes` is the archive's exact size; downloadMB is the rounded figure shown
+  // in the picker, and using it here ran the bar to between 102% and 106% on
+  // every Vosk model, since all four round down.
+  return model.bytes || model.downloadMB * 1e6;
 }
 
 const PART_SUFFIX = '.part';
@@ -344,7 +541,7 @@ function freeDiskBytes(dirPath) {
  */
 function installFootprintBytes(model) {
   if (model.files) return downloadBytes(model) + 128 * 1e6;
-  return model.downloadMB * 1e6 * 3;
+  return downloadBytes(model) * 3;
 }
 
 /**
@@ -440,39 +637,43 @@ function download(url, dest, onProgress, redirects = 0) {
   return new Promise((resolve, reject) => {
     if (redirects > 8) return reject(new Error('Too many redirects'));
 
-    const request = https.get(url, { headers: { 'User-Agent': 'ChatterLayer' } }, (res) => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        res.resume();
-        // Location may be relative — HuggingFace's first hop is a bare path such
-        // as /api/resolve-cache/... before the CDN redirect, and handing that
-        // straight to https.get throws ERR_INVALID_URL.
-        const next = new URL(res.headers.location, url).toString();
-        return resolve(download(next, dest, onProgress, redirects + 1));
-      }
-      if (res.statusCode !== 200) {
-        res.resume();
-        return reject(new Error(`Download failed: HTTP ${res.statusCode}`));
-      }
-
-      const total = Number(res.headers['content-length'] || 0);
-      let received = 0;
-      let lastTick = 0;
-
-      const file = fs.createWriteStream(dest);
-      res.on('data', (chunk) => {
-        received += chunk.length;
-        const now = Date.now();
-        // Throttle: this drives a progress bar over IPC, not a log.
-        if (onProgress && now - lastTick > 200) {
-          lastTick = now;
-          onProgress({ phase: 'download', received, total });
+    const request = https.get(
+      url,
+      { headers: { 'User-Agent': 'ChatterLayer' } },
+      (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume();
+          // Location may be relative — HuggingFace's first hop is a bare path such
+          // as /api/resolve-cache/... before the CDN redirect, and handing that
+          // straight to https.get throws ERR_INVALID_URL.
+          const next = new URL(res.headers.location, url).toString();
+          return resolve(download(next, dest, onProgress, redirects + 1));
         }
-      });
-      res.on('error', reject);
-      res.pipe(file);
-      file.on('error', reject);
-      file.on('finish', () => file.close(() => resolve()));
-    });
+        if (res.statusCode !== 200) {
+          res.resume();
+          return reject(new Error(`Download failed: HTTP ${res.statusCode}`));
+        }
+
+        const total = Number(res.headers['content-length'] || 0);
+        let received = 0;
+        let lastTick = 0;
+
+        const file = fs.createWriteStream(dest);
+        res.on('data', (chunk) => {
+          received += chunk.length;
+          const now = Date.now();
+          // Throttle: this drives a progress bar over IPC, not a log.
+          if (onProgress && now - lastTick > 200) {
+            lastTick = now;
+            onProgress({ phase: 'download', received, total });
+          }
+        });
+        res.on('error', reject);
+        res.pipe(file);
+        file.on('error', reject);
+        file.on('finish', () => file.close(() => resolve()));
+      }
+    );
 
     request.on('error', reject);
     // A stalled connection should fail, not hang the installer forever.
@@ -485,6 +686,12 @@ function download(url, dest, onProgress, redirects = 0) {
  *
  * Extraction is pure JS (extract-zip) rather than shelling out to PowerShell or
  * `unzip` — a packaged app cannot rely on either being present.
+ *
+ * The archive is checked before it is unpacked: the exact size, then `sha256` if
+ * the catalogue has one, else `md5`. This matters more here than for the
+ * HuggingFace models, whose URLs pin a commit so upstream cannot change under
+ * us; these are plain filenames on alphacephei.com with nothing but the version
+ * in the name to keep them stable.
  */
 async function installZip(model, modelsDirPath, target, onProgress) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chatterlayer-'));
@@ -492,6 +699,31 @@ async function installZip(model, modelsDirPath, target, onProgress) {
 
   try {
     await download(model.url, zipPath, onProgress);
+
+    const size = fs.statSync(zipPath).size;
+    if (model.bytes && size !== model.bytes) {
+      throw new Error(
+        `${model.dir}.zip downloaded as ${size} bytes but should be ${model.bytes}. ` +
+          `The download was truncated or the upstream file changed.`
+      );
+    }
+
+    // Prefer sha256 where we have one. md5 is only ever upstream's own published
+    // value, so it catches a corrupt transfer but not a deliberately swapped
+    // archive; see the `md5` note in the catalogue.
+    const algo = model.sha256 ? 'sha256' : model.md5 ? 'md5' : null;
+    if (algo) {
+      if (onProgress) onProgress({ phase: 'verify' });
+      const want = model[algo];
+      const got = await hashFile(zipPath, algo);
+      if (got !== want) {
+        throw new Error(
+          `${model.dir}.zip failed its ${algo} checksum (expected ` +
+            `${want.slice(0, 12)}…, got ${got.slice(0, 12)}…). ` +
+            `The download is corrupt — try again.`
+        );
+      }
+    }
 
     if (onProgress) onProgress({ phase: 'extract' });
     // The archives contain a single top-level folder matching model.dir, so
@@ -535,7 +767,8 @@ async function installFiles(model, target, onProgress) {
 
     const base = done;
     await download(file.url, part, (p) => {
-      if (onProgress) onProgress({ phase: 'download', received: base + p.received, total });
+      if (onProgress)
+        onProgress({ phase: 'download', received: base + p.received, total });
     });
 
     const size = fs.statSync(part).size;
@@ -650,7 +883,13 @@ function recommendedModelFor({ totalMemBytes = 0, cpuThreads = 0 } = {}) {
   const enoughCpu = cpuThreads >= CAPABLE_MIN_THREADS;
 
   if (enoughRam && enoughCpu) {
-    return { key: keyFor('capable'), tier: 'capable', limitedBy: null, ramGB, cpuThreads };
+    return {
+      key: keyFor('capable'),
+      tier: 'capable',
+      limitedBy: null,
+      ramGB,
+      cpuThreads,
+    };
   }
   return {
     key: keyFor('light'),

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Two staggered caption lines, in greys only. The lower, newer line is the
+       brighter one, since captions arrive at the bottom and fade as they rise;
+       within each line the speaker block leads the text.
+
+       Every position and size is a multiple of 16, which is one pixel at 32px:
+       in the app header (32px, or 64px on a 200% display) each edge lands on a
+       whole pixel instead of being smeared across two. Keep new shapes on it.
+
+       The source for build/icon.png: `npm run icon` rasterises this file, and
+       it reads only rects with #rrggbb fills, not paths, groups or transforms. -->
+  <rect width="512" height="512" rx="112" fill="#141619"/>
+  <rect x="112" y="160" width="256" height="64" rx="16" fill="#5C626B"/>
+  <rect x="64" y="144" width="96" height="96" rx="16" fill="#8A9099"/>
+  <rect x="192" y="288" width="256" height="64" rx="16" fill="#A1A7B0"/>
+  <rect x="144" y="272" width="96" height="96" rx="16" fill="#FFFFFF"/>
+</svg>
