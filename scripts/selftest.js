@@ -213,6 +213,27 @@ test('per-file downloads pin a revision and declare exact byte sizes', () => {
   }
 });
 
+test('zip downloads declare an exact size and a checksum', () => {
+  for (const m of MODEL_CATALOG.filter((x) => x.url)) {
+    // These URLs pin nothing — there is no revision in them — so the size and
+    // the hash are all that stands between a swapped archive and a user's disk.
+    assert.ok(
+      Number.isInteger(m.bytes) && m.bytes > 0,
+      `${m.key} needs the archive's exact byte size`
+    );
+    assert.ok(m.sha256 || m.md5, `${m.key} needs a sha256 or, failing that, an md5`);
+    if (m.sha256 != null) {
+      assert.ok(
+        /^[0-9a-f]{64}$/.test(m.sha256),
+        `${m.key} sha256 must be 64 lowercase hex chars`
+      );
+    }
+    if (m.md5 != null) {
+      assert.ok(/^[0-9a-f]{32}$/.test(m.md5), `${m.key} md5 must be 32 hex chars`);
+    }
+  }
+});
+
 test('keys, aliases and directories are all unique', () => {
   const seen = new Map();
   for (const m of MODEL_CATALOG) {

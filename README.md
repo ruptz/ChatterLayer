@@ -543,8 +543,8 @@ Open the model picker (**Get models**) and download one.
 The sign-in line under the dropdown says which it is.
 
 - *Sign-in failed* — the token is wrong, or you reset it in the Developer Portal
-  and ChatterLayer still has the old one. Paste the current token and press
-  **Refresh**.
+  and ChatterLayer still has the old one. Paste the current token over the old
+  one — it signs in again by itself.
 - *Signed in, but no servers* — the bot isn't in a server yet, or the only ones
   it's in have no voice channels. Re-run the invite URL from step 3.
 
@@ -692,7 +692,16 @@ npm run bench -- --all --wav=some.wav      # RAM, CPU and caption latency
 npm run test:stt -- --all --wav=some.wav   # transcribe a WAV on every model
 npm run test:vosk -- some.wav              # Vosk only, exercises the FFI binding
 npm run engine:headless          # run the engine without Electron, for debugging
+
+npm run hash-models                         # checksums for installed models
+npm run hash-models -- parakeet             # just one
+npm run hash-models -- some-model.zip       # a downloaded Vosk archive
 ```
+
+`hash-models` prints paste-ready `MODEL_CATALOG` entries. Run it after changing
+a model's pinned revision: the revision, the byte sizes and the hashes all have
+to move together, or every download fails its checksum for reasons that look
+like corruption and aren't.
 
 Config lives in `chatterlayer-config.json` in Electron's user-data folder
 (**Show config file** in the UI reveals it). The bot token inside is encrypted
@@ -1065,6 +1074,47 @@ git push origin v1.0.1
 That triggers `release.yml`, which builds all three platforms in parallel and
 opens a **draft** GitHub Release with everything attached. Review it, then hit
 publish.
+
+### Smoke-test before you publish
+
+CI builds the installers but never runs them, so this is the only check that the
+thing actually launches. **Do it on a machine that isn't your dev box** — a
+fresh VM is ideal. Your own PC already has models downloaded, a config file,
+`vendor/libvosk`, and Node installed, which is exactly the state that hides "it
+needs something my machine happens to have".
+
+Install from the draft's own installer, not a local build. Ten minutes:
+
+1. **Install and launch.** Click through the SmartScreen warning — you're
+   checking the path a real user takes, warning and all.
+2. **Download the model the app recommends.** It marks one based on your RAM and
+   CPU threads, so this exercises that detection as well as the download. Watch
+   the bar reach 100% and finish — a failed checksum or a short file stops it
+   here rather than at load time. (Moonshine Base is the quick one if you're
+   short on time.)
+3. **Paste a bot token, pick a server and channel, Connect.** Pasting signs in
+   on its own — no button press. The Log panel names each stage, so anything
+   that stalls tells you where.
+4. **Caption two people at once.** Switch them both on in the Channels panel and
+   check the OBS overlay shows both, each in their own colour. One speaker is
+   not a real test — the interesting bugs live in two.
+5. **Start the Remote overlay tunnel, open the link, stop it.** Confirm it comes
+   up *down* by default, since that's the promise.
+6. **Close to tray, reopen from the tray, quit from the tray.** Easy to break
+   and immediately obvious to users when it is.
+
+Two more worth doing while the draft is still a draft:
+
+- **Verify the checksums you're asking other people to trust.** The
+  `cosign verify-blob` and `sha256sum -c` commands are in the comment above the
+  *Generate SHA256SUMS* step in `release.yml`. If they don't pass on your own
+  download, nobody else's will either.
+- **On a Mac, take the Gatekeeper path.** Right-click → *Open*, then let the
+  app's one-click quarantine fix run and relaunch normally. It can't be tested
+  from Windows, and it's the first thing every macOS user meets.
+
+Publishing is the last step, because it's the one that tells every existing user
+there's an update — see below.
 
 ### How users find out
 

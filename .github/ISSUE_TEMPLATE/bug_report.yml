@@ -1,0 +1,138 @@
+name: Bug report
+description: Something is broken, or the app does something other than what it says it will.
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never paste your Discord bot token** — not in the description, not in a
+        log, not in a screenshot of the Source panel. Anyone who reads it can run
+        your bot. If you think it has leaked, press **Reset Token** in the Discord
+        Developer Portal and the old one dies immediately.
+
+        ChatterLayer measures nothing and sends nothing home, so what you write
+        here is all I get. The more of the below you fill in, the fewer rounds of
+        questions it takes.
+
+  - type: checkboxes
+    id: homework
+    attributes:
+      label: First
+      options:
+        - label: I read [Troubleshooting](https://github.com/ruptz/ChatterLayer#troubleshooting) and my problem isn't one of the ones listed there.
+          required: true
+        - label: I searched the existing issues.
+          required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what happened instead.
+      placeholder: |
+        Switched two people on in the Channels panel and pressed Connect. One
+        person's captions came through fine. The other never got any, even
+        though Discord showed the green ring while they were talking.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The stamp in the top-right of the control panel.
+      placeholder: '0.2.0'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Linux
+    validations:
+      required: true
+
+  - type: dropdown
+    id: build
+    attributes:
+      label: How you installed it
+      options:
+        - Windows installer (.exe)
+        - Windows portable (.exe)
+        - macOS (.dmg)
+        - Linux (.deb)
+        - From source (npm start)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where it goes wrong
+      description: Named after the panels in the app, so pick whichever one you were looking at.
+      options:
+        - Installing or launching
+        - Picking or downloading a speech model
+        - Source — token, sign-in, server and channel pickers
+        - Connecting to voice (stuck on Linking, or joins and leaves)
+        - Channels — choosing who gets captioned
+        - Monitor — captions inside the app
+        - Output — the OBS overlay, or the port
+        - Remote overlay — sharing captions with a co-streamer
+        - Word filter
+        - Tray, update check, or quitting
+        - Somewhere else
+    validations:
+      required: true
+
+  - type: dropdown
+    id: model
+    attributes:
+      label: Speech model
+      description: Which one was loaded when it went wrong. Several are affected by the same bug surprisingly often, so say if you tried more than one.
+      options:
+        - Vosk Small
+        - Vosk Medium
+        - Vosk Large
+        - Vosk Gigaspeech
+        - Moonshine Base
+        - Whisper Tiny
+        - Whisper Base
+        - Whisper Small
+        - Parakeet TDT 0.6B
+        - More than one, same result
+        - No model downloaded yet
+        - Not relevant to this
+
+  - type: textarea
+    id: log
+    attributes:
+      label: The Log panel
+      description: |
+        Copy what the **Log** panel says — it reports each stage of a connect
+        (signing in → loading model → looking up channel → joining voice), so it
+        usually shows exactly where things stopped. Your token is never written
+        to the log, but it does carry Discord display names, so trim those if
+        you would rather not have them public.
+      render: text
+      placeholder: |
+        [14:02:11] Signing in…
+        [14:02:12] Signed in as CaptionBot#4417
+        [14:02:12] Loading Parakeet TDT 0.6B…
+        [14:02:19] Joining voice channel "stream"
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: |
+        Screenshots of the overlay or the panel, how many people were being
+        captioned, whether **Remote overlay** was running, whether it happens
+        every time or only sometimes. Worth saying if it started after a Discord
+        or OS update.

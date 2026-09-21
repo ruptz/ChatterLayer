@@ -1,0 +1,21 @@
+# Issues are for bugs and concrete feature requests. Questions, setup trouble
+# and "is this normal?" go to Discussions, which keeps the issue list short
+# enough to actually work through.
+blank_issues_enabled: false
+
+contact_links:
+  - name: Setup help, or a question
+    url: https://github.com/ruptz/ChatterLayer/discussions/new?category=help
+    about: Bot not joining, empty server list, blank overlay in OBS — ask here and it gets answered in the open, where the next person can find it.
+
+  - name: Troubleshooting guide
+    url: https://github.com/ruptz/ChatterLayer#troubleshooting
+    about: Covers the common ones already — greyed-out channels, stuck on Linking, no captions, captions falling behind, port clashes.
+
+  - name: Which speech model should I pick?
+    url: https://github.com/ruptz/ChatterLayer#which-speech-model-should-i-pick
+    about: Accuracy, memory and CPU for all nine models, measured rather than guessed. Read this before filing "the captions are wrong".
+
+  - name: Is the unsigned build safe?
+    url: https://github.com/ruptz/ChatterLayer#1-install-chatterlayer
+    about: Windows SmartScreen and macOS "damaged" warnings are expected — the builds are unsigned on purpose. Every release ships a signed SHA256SUMS and build provenance you can verify.

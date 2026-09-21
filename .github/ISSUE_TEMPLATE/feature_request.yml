@@ -1,0 +1,66 @@
+name: Feature request
+description: Something the app should do that it doesn't.
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Two things worth knowing before you write, because they rule some
+        requests out and make others easy:
+
+        - **Captioning runs on your own machine, always.** No cloud speech APIs,
+          no accounts, no sending audio anywhere. A request that needs a server
+          isn't going to happen.
+        - **Anything that touches the network is opt-in and off at launch** —
+          that's deliberate, not an oversight.
+
+        If you're not sure whether something is a feature request or a question,
+        [start a discussion](https://github.com/ruptz/ChatterLayer/discussions/new?category=ideas)
+        instead. Nothing is lost either way.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: The situation, not the solution. What you're doing on stream when you run into this.
+      placeholder: |
+        I co-stream with two other people and we each want the captions sized
+        differently in our own scene. Right now I have to tell them a URL to
+        edit by hand.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you want it to do
+      description: Your idea of how it should work, if you have one. Fine to leave this vague.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of the app
+      options:
+        - Setup — getting the bot connected the first time
+        - Source — token, servers, channels
+        - Channels — who gets captioned
+        - Monitor — the in-app caption view
+        - Output — the OBS overlay and how it looks
+        - Remote overlay — co-streamers
+        - Word filter
+        - Speech models and accuracy
+        - Tray, updates, packaging
+        - Something new that doesn't fit the above
+    validations:
+      required: true
+
+  - type: textarea
+    id: setup
+    attributes:
+      label: Your setup
+      description: |
+        Only if it's relevant — how many people you usually caption, which model
+        you run, whether you're on Windows, macOS or Linux. It's the difference
+        between a feature that helps one layout and one that helps everybody.

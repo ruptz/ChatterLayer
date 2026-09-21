@@ -177,11 +177,15 @@ function renderAuth() {
     else el.authNote.removeAttribute('data-state');
   };
 
+  // Signed in, the button's job changes from getting you in to re-reading the
+  // server list, so it says so.
+  el.refreshGuilds.textContent = d.auth === 'signed-in' ? 'Refresh' : 'Sign in';
+
   if (d.auth === 'signed-in') set(d.botTag ? `Signed in as ${d.botTag}` : 'Signed in', 'ok');
   else if (d.auth === 'signing-in') set('Signing in…', 'working');
   else if (d.auth === 'error') set(d.message || 'Sign-in failed — check your bot token.', 'fault');
-  else if (state.config && state.config.hasToken) set('Not signed in — press Refresh.');
-  else set('Paste your bot token, then press Refresh.');
+  else if (state.config && state.config.hasToken) set('Not signed in.');
+  else set('Paste your bot token — it signs in by itself.');
 }
 
 function renderGuilds() {
@@ -928,6 +932,9 @@ function onModelProgress(p) {
     const pct = (p.received / p.total) * 100;
     bar.style.width = `${pct}%`;
     if (button) button.textContent = `${pct.toFixed(0)}%`;
+  } else if (p.phase === 'verify') {
+    bar.style.width = '100%';
+    if (button) button.textContent = 'Checking…';
   } else if (p.phase === 'extract') {
     bar.style.width = '100%';
     if (button) button.textContent = 'Unpacking…';
@@ -1177,6 +1184,37 @@ el.token.addEventListener('focus', () => {
   }
 });
 
+/**
+ * Bot tokens are three dot-separated parts. This decides *when* to sign in on
+ * its own — not whether a token is acceptable — so that a half-typed one
+ * doesn't fire a sign-in per keystroke. Anything it doesn't recognise still
+ * signs in from the button, which is what Discord changing the shape would
+ * look like.
+ */
+const looksLikeToken = (t) => /^[\w-]{20,}\.[\w-]{5,}\.[\w-]{20,}$/.test(t);
+
+async function signIn(token) {
+  try {
+    await window.chatterlayer.signIn(token);
+  } catch (err) {
+    log(err.message, 'error');
+  }
+}
+
+/** The last token we tried, so retyping the same one doesn't sign in twice. */
+let attemptedToken = '';
+
+// Sign in a moment after typing stops, so pasting the token is the whole step.
+const signInWhenPasted = debounce(() => {
+  const token = el.token.value.trim();
+  if (el.token.dataset.masked || !looksLikeToken(token)) return;
+  if (token === attemptedToken || state.discord.auth === 'signing-in') return;
+  attemptedToken = token;
+  signIn(token);
+}, 700);
+
+el.token.addEventListener('input', signInWhenPasted);
+
 el.start.addEventListener('click', async () => {
   el.start.disabled = true;
   setTally('linking', 'Linking');
@@ -1224,14 +1262,11 @@ el.filterEnabled.addEventListener('change', () => {
 });
 el.filterCustom.addEventListener('input', saveFilter);
 
-el.refreshGuilds.addEventListener('click', async () => {
-  try {
-    await window.chatterlayer.signIn(
-      el.token.dataset.masked ? undefined : el.token.value.trim() || undefined
-    );
-  } catch (err) {
-    log(err.message, 'error');
-  }
+el.refreshGuilds.addEventListener('click', () => {
+  const token = el.token.dataset.masked ? undefined : el.token.value.trim() || undefined;
+  // A deliberate press retries a token the debounce already gave up on.
+  attemptedToken = token || '';
+  return signIn(token);
 });
 
 el.guild.addEventListener('change', async () => {
