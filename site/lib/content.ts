@@ -269,7 +269,11 @@ export const setupSteps: SetupStep[] = [
   },
   {
     title: 'Paste the token, pick a channel',
-    body: 'Drop the bot token into the Source panel. It signs in on its own, and the Server and Voice channel dropdowns fill up with everywhere your bot can reach. Choose one and hit Connect. There’s no channel ID to copy and no Developer Mode to turn on, and channels your bot can’t join are greyed out with the missing permission named.',
+    // Describes v0.2.0, which is what the Download button actually gets you.
+    // The app signs in on paste from v0.3.0 -- when that ships, this becomes
+    // 'Drop the bot token into the Source panel. It signs in on its own, and
+    // the Server and Voice channel dropdowns fill up ...'.
+    body: 'Drop the bot token into the Source panel and press Refresh. The Server and Voice channel dropdowns fill up with everywhere your bot can reach. Choose one and hit Connect. There’s no channel ID to copy and no Developer Mode to turn on, and channels your bot can’t join are greyed out with the missing permission named.',
     note: 'The token goes into your operating system’s own keystore, DPAPI on Windows, Keychain on macOS, libsecret on Linux, so you paste it once and never think about it again.',
   },
   {
