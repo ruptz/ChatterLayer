@@ -120,7 +120,7 @@ jobs:
       # workflow. Free and GitHub-native; `gh attestation verify <file>` checks
       # it. Does not need a signing certificate.
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: ${{ matrix.attest }}
 
