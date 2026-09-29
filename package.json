@@ -47,7 +47,7 @@
     "ws": "^8.21.3"
   },
   "devDependencies": {
-    "electron": "^43.7.6",
+    "electron": "^44.4.5",
     "electron-builder": "^26.15.3",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^9.1.2",
