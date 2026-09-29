@@ -17,6 +17,10 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # A new compiler major buys users nothing; move when there's a reason to.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /
@@ -36,3 +40,9 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      # These describe the Node that Vercel runs, not the newest one.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
