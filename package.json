@@ -39,7 +39,7 @@
     "@discordjs/voice": "^0.19.2",
     "discord.js": "^14.27.0",
     "extract-zip": "^2.0.1",
-    "koffi": "^3.1.2",
+    "koffi": "^3.3.1",
     "libsodium-wrappers": "^0.8.4",
     "onnxruntime-node": "^1.23.0",
     "opusscript": "^0.0.8",
