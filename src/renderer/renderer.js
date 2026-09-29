@@ -407,6 +407,18 @@ function effectiveChannelId() {
   return el.voiceChannel.value || '';
 }
 
+/**
+ * The picker follows the bot when someone else moves it, and remembers the
+ * move, so a reconnect goes where the call actually is.
+ */
+function showJoinedChannel(channelId) {
+  if (!channelId || channelId === el.voiceChannel.value) return;
+  if (![...el.voiceChannel.options].some((o) => o.value === channelId)) return;
+  el.voiceChannel.value = channelId;
+  updateChannelNote();
+  persistChannel();
+}
+
 async function persistChannel() {
   const channelId = el.voiceChannel.value;
   if (!channelId) return;
@@ -876,6 +888,7 @@ function handleEvent(msg) {
         el.start.disabled = true;
         el.stop.disabled = false;
         log(msg.source === 'mic' ? msg.message : `Joined ${msg.guildName} / #${msg.channelName}`);
+        showJoinedChannel(msg.channelId);
         syncMic();
       } else if (msg.state === 'error') {
         setTally('fault', 'Fault');

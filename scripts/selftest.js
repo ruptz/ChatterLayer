@@ -2326,6 +2326,39 @@ testAsync('after a move, streams are rebuilt once the new voice session is up â€
   assert.strictEqual(rebuilds, 1);
 });
 
+testAsync('a stream rebuilt straight after teardown waits for the old one to close, not reuse it', async () => {
+  const { PassThrough } = require('stream');
+  const { engine } = engineInCall();
+  const subscriptions = new Map();
+  const subscribed = [];
+  engine.receiver = {
+    subscriptions,
+    // Like @discordjs/voice: an entry is handed back until its stream closes.
+    subscribe(userId) {
+      if (subscriptions.has(userId)) return subscriptions.get(userId);
+      const s = new PassThrough();
+      s.once('close', () => subscriptions.delete(userId));
+      subscriptions.set(userId, s);
+      subscribed.push(s);
+      return s;
+    },
+  };
+  engine.workerReady = true;
+  engine.worker = { postMessage() {} };
+  engine.selected = new Set(['u1']);
+
+  engine.setupStream('u1');
+  const first = subscribed[0];
+  engine.teardownStream('u1');
+  engine.setupStream('u1'); // the rebuild, in the same tick
+  assert.strictEqual(subscribed.length, 1, 'must not subscribe while the old stream is still on the books');
+  await wait(10);
+  assert.strictEqual(subscribed.length, 2, 'subscribes once the old one has closed');
+  assert.notStrictEqual(engine.streams.get('u1').opusStream, first);
+  assert.ok(!engine.streams.get('u1').opusStream.destroyed, 'the live stream is the new one');
+  engine.teardownStream('u1');
+});
+
 test('rebuilding streams leaves the mic running', () => {
   const { engine } = engineInCall();
   const torn = [];

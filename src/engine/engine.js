@@ -1010,6 +1010,17 @@ class ChatterLayerEngine {
     if (this.coveredByMic(userId)) return;
     if (!this.receiver || this.streams.has(userId) || !this.workerReady) return;
 
+    // A stream just torn down stays in the receiver's books until it finishes
+    // closing, and subscribe() would hand that dead one back. Wait it out; the
+    // receiver's own close handler, registered first, clears the entry.
+    const leaving = this.receiver.subscriptions?.get(userId);
+    if (leaving?.destroyed) {
+      leaving.once('close', () => {
+        if (this.selected.has(userId)) this.setupStream(userId);
+      });
+      return;
+    }
+
     this.worker.postMessage({ type: 'add', userId });
 
     const opusStream = this.receiver.subscribe(userId, {
