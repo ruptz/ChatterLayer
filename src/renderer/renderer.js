@@ -12,6 +12,15 @@ const $ = (id) => document.getElementById(id);
 const el = {
   tally: $('tally'),
   statusText: $('status-text'),
+  sourceCard: $('source-card'),
+  source: $('source'),
+  sourceNote: $('source-note'),
+  micField: $('mic-field'),
+  micDevice: $('mic-device'),
+  micSensitivity: $('mic-sensitivity'),
+  micHang: $('mic-hang'),
+  vSensitivity: $('v-sensitivity'),
+  vHang: $('v-hang'),
   token: $('token'),
   toggleToken: $('toggle-token'),
   tokenHint: $('token-hint'),
@@ -63,17 +72,56 @@ const el = {
   settingsToggle: $('settings-toggle'),
   settingsPanel: $('settings-panel'),
   closeToTray: $('close-to-tray'),
+  theme: $('theme'),
+  pause: $('pause'),
+  loginRow: $('login-row'),
+  launchAtLogin: $('launch-at-login'),
+  hotkeysEnabled: $('hotkeys-enabled'),
+  hotkeysHint: $('hotkeys-hint'),
   vFont: $('v-font'),
   vLife: $('v-life'),
   vLines: $('v-lines'),
+  botGuide: $('bot-guide'),
+  inviteBot: $('invite-bot'),
+  obsMeta: $('obs-meta'),
+  testCaption: $('test-caption'),
+  report: $('report'),
+  whatsNew: $('whats-new'),
+  whatsNewTitle: $('whats-new-title'),
+  whatsNewBody: $('whats-new-body'),
+  whatsNewClose: $('whats-new-close'),
+  whatsNewNotes: $('whats-new-notes'),
+  whatsNewKofi: $('whats-new-kofi'),
+  setup: $('setup'),
+  setupMeta: $('setup-meta'),
+  setupPath: $('setup-path'),
+  setupHint: $('setup-hint'),
+  setupAction: $('setup-action'),
+  setupHide: $('setup-hide'),
 };
+
+const KOFI_URL = 'https://ko-fi.com/ruptz';
+const BOT_GUIDE_URL = 'https://chatterlayer.com/#setup';
+
+/** View Channel (1 << 10) + Connect (1 << 20). It never speaks, so no Speak. */
+const INVITE_PERMISSIONS = 1049600;
+
+const inviteUrl = (botId) =>
+  `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(botId)}` +
+  `&scope=bot&permissions=${INVITE_PERMISSIONS}`;
 
 let state = {
   config: null,
   members: [],
   running: false,
   /** Sign-in state and the server/channel tree the pickers are built from. */
-  discord: { auth: 'idle', botTag: null, message: '', guilds: [] },
+  discord: { auth: 'idle', botTag: null, botId: null, message: '', guilds: [] },
+  /** Overlays connected to the caption server; `local` is in practice OBS. */
+  overlays: { local: 0, remote: 0 },
+  /** Release notes to show once after an update, or null. */
+  whatsNew: null,
+  /** Connected but sending nothing. */
+  paused: false,
   /**
    * The model the worker actually has loaded, as opposed to the one selected in
    * the dropdown. They differ whenever someone switches models mid-call.
@@ -92,6 +140,17 @@ const partials = new Map();
 const blips = new Map();
 
 // ------------------------------------------------------------- indicators --
+
+/** On air, unless paused — then the lamp says so, and so does the key. */
+function renderLive() {
+  if (state.running) {
+    if (state.paused) setTally('paused', 'Paused');
+    else setTally('onair', 'On air');
+  }
+  el.pause.hidden = !state.running;
+  el.pause.textContent = state.paused ? 'Resume captions' : 'Pause captions';
+  el.pause.classList.toggle('btn-primary', state.paused);
+}
 
 /**
  * Drive the tally lamp.
@@ -158,14 +217,20 @@ const saveFilter = debounce(async () => {
   });
 }, 400);
 
-const savePort = debounce(async () => {
+// Applied on blur or Enter, not while typing: a pause halfway through "50000"
+// would otherwise move the server to 5000 first.
+async function savePort() {
   const port = Number(el.port.value);
-  if (!Number.isInteger(port) || port < 1024 || port > 65535) return;
+  if (port === state.config.server.port) return;
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+    el.port.value = state.config.server.port;
+    return;
+  }
   log(`Moving caption server to port ${port}…`);
   state.config = await window.chatterlayer.updateConfig({
     server: { ...state.config.server, port },
   });
-}, 700);
+}
 
 // ------------------------------------------------- server / channel pickers --
 
@@ -186,14 +251,51 @@ function renderAuth() {
   else if (d.auth === 'error') set(d.message || 'Sign-in failed — check your bot token.', 'fault');
   else if (state.config && state.config.hasToken) set('Not signed in.');
   else set('Paste your bot token — it signs in by itself.');
+
+  renderInvite();
+  renderSetup();
+}
+
+/**
+ * Signed in, the app knows the bot's id, which is all the invite link needs —
+ * so nobody has to find the URL Generator. While the bot is in no server with
+ * a voice channel this is the only way forward, and it looks like it.
+ */
+function renderInvite() {
+  const d = state.discord;
+  el.inviteBot.hidden = !(d.auth === 'signed-in' && d.botId);
+  const lonely = !(d.guilds || []).length;
+  el.inviteBot.className = lonely ? 'btn btn-sm btn-primary invite-cta' : 'linky';
+  el.inviteBot.textContent = lonely
+    ? 'Invite the bot to a server'
+    : 'Invite the bot to another server';
+}
+
+function openInvite() {
+  if (!state.discord.botId) return;
+  window.chatterlayer.openExternal(inviteUrl(state.discord.botId));
+  log('Opened the invite page — pick a server there. It shows up here by itself.');
+}
+
+/**
+ * A placeholder option. Given an explicit empty value because an <option>
+ * without one reports its text as its value, and "—" would then be sent to
+ * Connect as a channel id.
+ */
+function placeholder(text) {
+  const opt = document.createElement('option');
+  opt.value = '';
+  opt.textContent = text;
+  return opt;
 }
 
 function renderGuilds() {
   const guilds = state.discord.guilds || [];
   el.guild.replaceChildren();
+  renderInvite();
 
   if (!guilds.length) {
-    const opt = document.createElement('option');
+    const opt = placeholder('');
     opt.textContent =
       state.discord.auth === 'signed-in' ? 'No servers with voice channels' : '—';
     el.guild.appendChild(opt);
@@ -223,9 +325,7 @@ function renderChannels() {
   el.voiceChannel.replaceChildren();
 
   if (!guild) {
-    const opt = document.createElement('option');
-    opt.textContent = '—';
-    el.voiceChannel.appendChild(opt);
+    el.voiceChannel.appendChild(placeholder('—'));
     el.voiceChannel.disabled = true;
     updateChannelNote();
     return;
@@ -267,11 +367,15 @@ function currentChannel() {
 function updateChannelNote() {
   const c = currentChannel();
 
+  renderSetup();
+
   if (!c) {
-    el.channelNote.textContent =
-      state.discord.auth === 'signed-in'
+    const signedIn = state.discord.auth === 'signed-in';
+    el.channelNote.textContent = !signedIn
+      ? 'Sign in to list your servers and voice channels.'
+      : (state.discord.guilds || []).length
         ? 'No voice channel here that the bot can join.'
-        : 'Sign in to list your servers and voice channels.';
+        : 'Invite the bot to your server — its channels appear here by themselves.';
     el.channelNote.removeAttribute('data-state');
     return;
   }
@@ -307,6 +411,164 @@ async function persistChannel() {
   const channelId = el.voiceChannel.value;
   if (!channelId) return;
   state.config = await window.chatterlayer.updateConfig({ channelId });
+}
+
+// ---------------------------------------------------------------- source --
+
+const SOURCE_NOTES = {
+  discord: 'The people in a Discord voice call, heard through your bot.',
+  mic: 'This PC’s microphone only. Discord is never signed in to — nothing leaves this PC.',
+  both:
+    'The call, plus your own mic — so what you say while muted or off push-to-talk still gets captioned. Press “This is me” on your Discord row so you’re only captioned once.',
+};
+
+const currentSource = () => (state.config && state.config.source) || 'discord';
+const usesMic = () => currentSource() !== 'discord';
+
+/**
+ * Show only what the chosen source needs. The Discord fields are hidden for
+ * the mic alone, not disabled, and the transport says Start rather than
+ * Connect, because there is nothing to connect to.
+ */
+function renderSource() {
+  const source = currentSource();
+  el.sourceCard.dataset.source = source;
+  for (const radio of el.source.querySelectorAll('input')) {
+    radio.checked = radio.value === source;
+    // The engine is started for one source; switching means reconnecting.
+    radio.disabled = state.running;
+  }
+  el.sourceNote.textContent = state.running
+    ? `${SOURCE_NOTES[source]} ${source === 'mic' ? 'Stop' : 'Disconnect'} to change it.`
+    : SOURCE_NOTES[source];
+  el.micField.hidden = !usesMic();
+  el.start.textContent = source === 'mic' ? 'Start' : 'Connect';
+  el.stop.textContent = source === 'mic' ? 'Stop' : 'Disconnect';
+}
+
+/**
+ * Fill the microphone picker. Browsers hide device names until the mic has
+ * been opened once, so before that they are numbered instead.
+ */
+async function renderMics() {
+  let inputs = [];
+  try {
+    inputs = (await navigator.mediaDevices.enumerateDevices()).filter(
+      (d) => d.kind === 'audioinput' && d.deviceId !== 'default' && d.deviceId !== 'communications'
+    );
+  } catch {
+    /* no media devices at all; the default entry still stands */
+  }
+  el.micDevice.replaceChildren(placeholder('System default'));
+  inputs.forEach((d, i) => {
+    const opt = document.createElement('option');
+    opt.value = d.deviceId;
+    opt.textContent = d.label || `Microphone ${i + 1}`;
+    el.micDevice.appendChild(opt);
+  });
+  const saved = state.config.mic.deviceId;
+  el.micDevice.value = inputs.some((d) => d.deviceId === saved) ? saved : '';
+}
+
+function syncGateLabels() {
+  el.vSensitivity.textContent = el.micSensitivity.value;
+  el.vHang.textContent = `${(Number(el.micHang.value) / 1000).toFixed(1)}s`;
+}
+
+const saveMicGate = debounce(async () => {
+  state.config = await window.chatterlayer.updateConfig({
+    mic: {
+      ...state.config.mic,
+      sensitivity: Number(el.micSensitivity.value),
+      hangMs: Number(el.micHang.value),
+    },
+  });
+});
+
+// ------------------------------------------------------------ mic capture --
+
+/**
+ * The live capture, when there is one. Held only while the mic's channel is
+ * switched on during a session: the OS mic-in-use light should mean captions
+ * are actually being made.
+ */
+let mic = null;
+/** Bumped on every stop, so a capture that finishes opening late closes itself. */
+let micGen = 0;
+
+function micWanted() {
+  return state.running && state.members.some((m) => m.local && m.selected);
+}
+
+function syncMic() {
+  if (micWanted()) {
+    if (!mic) startMic();
+  } else if (mic) {
+    stopMic();
+  }
+}
+
+async function openMicStream(deviceId) {
+  const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+  if (deviceId) audio.deviceId = { exact: deviceId };
+  return navigator.mediaDevices.getUserMedia({ audio });
+}
+
+async function startMic() {
+  const gen = ++micGen;
+  mic = { opening: true };
+  let stream = null;
+  let ctx = null;
+  try {
+    if (!(await window.chatterlayer.micAccess())) {
+      throw new Error('access is turned off for ChatterLayer in System Settings → Privacy & Security → Microphone.');
+    }
+    const wanted = state.config.mic.deviceId;
+    try {
+      stream = await openMicStream(wanted);
+    } catch (err) {
+      // The chosen mic was unplugged since; the default beats silence.
+      if (!wanted || err.name !== 'OverconstrainedError') throw err;
+      log('The chosen microphone isn’t connected — using the system default.', 'warn');
+      stream = await openMicStream('');
+    }
+
+    // Chromium resamples the mic to the 16 kHz every speech model here takes.
+    ctx = new AudioContext({ sampleRate: 16000 });
+    await ctx.audioWorklet.addModule('mic-worklet.js');
+    if (gen !== micGen) throw new Error('stopped');
+
+    const node = new AudioWorkletNode(ctx, 'mic-tap');
+    node.port.onmessage = (e) => window.chatterlayer.micAudio(new Uint8Array(e.data.buffer));
+    ctx.createMediaStreamSource(stream).connect(node);
+    // Pulled by the destination so it runs; it writes nothing, so nothing is heard.
+    node.connect(ctx.destination);
+
+    const [track] = stream.getAudioTracks();
+    track.addEventListener('ended', () => {
+      if (gen !== micGen) return;
+      log('The microphone went away — trying again.', 'warn');
+      stopMic();
+      setTimeout(syncMic, 1000);
+    });
+    mic = { stream, ctx };
+    log(`Mic live: ${track.label || 'system default'}`);
+    // Names are readable now the mic has been opened once.
+    renderMics();
+  } catch (err) {
+    if (stream) for (const t of stream.getTracks()) t.stop();
+    if (ctx) ctx.close().catch(() => {});
+    if (gen !== micGen) return;
+    mic = null;
+    log(`Couldn’t open the microphone: ${err.message}`, 'error');
+  }
+}
+
+function stopMic() {
+  micGen++;
+  if (mic && mic.stream) for (const t of mic.stream.getTracks()) t.stop();
+  if (mic && mic.ctx) mic.ctx.close().catch(() => {});
+  mic = null;
 }
 
 // ------------------------------------------------------- channel strips --
@@ -355,7 +617,9 @@ function renderMembers() {
     name.value = m.captionName;
     name.placeholder = m.displayName;
     name.spellcheck = false;
-    name.title = 'Name shown on captions — clear it to use their Discord name';
+    name.title = m.local
+      ? 'Name shown on captions for your mic'
+      : 'Name shown on captions — clear it to use their Discord name';
     name.setAttribute('aria-label', `Caption name for ${m.displayName}`);
 
     const commit = () => {
@@ -363,7 +627,8 @@ function renderMembers() {
       if (next === (m.alias || '') || (!next && !m.alias)) return; // unchanged
       m.alias = next;
       window.chatterlayer.setAlias(m.id, next);
-      log(next ? `${m.displayName} shows as “${next}”` : `${m.displayName} shows their Discord name`);
+      const fallback = m.local ? `${m.displayName} shows as “Mic”` : `${m.displayName} shows their Discord name`;
+      log(next ? `${m.displayName} shows as “${next}”` : fallback);
     };
     name.addEventListener('change', commit);
     name.addEventListener('keydown', (e) => {
@@ -375,7 +640,11 @@ function renderMembers() {
     });
 
     const meta = document.createElement('small');
-    meta.textContent = `@${m.username} · ${m.id}`;
+    meta.textContent = m.local
+      ? 'This PC · microphone'
+      : m.coveredByMic
+        ? `@${m.username} · you — captioned from your mic instead`
+        : `@${m.username} · ${m.id}`;
     who.append(name, meta);
 
     li.append(dot, who);
@@ -394,6 +663,35 @@ function renderMembers() {
       reset.title = 'Return to the automatic colour';
       reset.addEventListener('click', () => window.chatterlayer.setColor(m.id, null));
       li.append(reset);
+    }
+
+    // Follow mode: the bot goes where this person goes, within this server.
+    // "This is me", only with the call and the mic both on. It is what stops the
+    // streamer being captioned twice: once through Discord, once through the mic.
+    if (!m.bot && !m.local && currentSource() === 'both') {
+      const me = document.createElement('button');
+      me.className = `btn btn-sm follow${m.me ? ' on' : ''}`;
+      me.textContent = m.me ? 'Me' : 'This is me';
+      me.setAttribute('aria-pressed', String(Boolean(m.me)));
+      me.title = m.me
+        ? 'While your mic is on, your Discord audio is skipped so you are only captioned once. Click to undo.'
+        : 'Mark this as your own Discord account. Your mic then captions you, so you aren’t captioned twice.';
+      me.addEventListener('click', () => setMe(m.me ? null : m.id, m));
+      li.append(me);
+    }
+
+    // Never offered for bots, which don't change channels to be followed, nor
+    // for the mic, which isn't in one.
+    if (!m.bot && !m.local) {
+      const follow = document.createElement('button');
+      follow.className = `btn btn-sm follow${m.followed ? ' on' : ''}`;
+      follow.textContent = m.followed ? 'Following' : 'Follow';
+      follow.setAttribute('aria-pressed', String(Boolean(m.followed)));
+      follow.title = m.followed
+        ? `The bot moves with ${m.captionName} between voice channels in this server. Click to stop.`
+        : `Have the bot follow ${m.captionName} when they change voice channel in this server.`;
+      follow.addEventListener('click', () => setFollow(m.followed ? null : m.id, m));
+      li.append(follow);
     }
 
     // caption colour picker
@@ -425,6 +723,24 @@ function renderMembers() {
   }
 }
 
+async function setFollow(userId, member) {
+  state.config = await window.chatterlayer.setFollow(userId);
+  log(
+    userId
+      ? `Following ${member.captionName} — the bot moves when they change voice channel in this server. Their captions stay ${member.selected ? 'on' : 'off'}.`
+      : 'Follow mode off — the bot stays where it is.'
+  );
+}
+
+async function setMe(userId, member) {
+  state.config = await window.chatterlayer.setMe(userId);
+  log(
+    userId
+      ? `${member.captionName} is you — while your mic is on, you’re captioned from it, not from Discord.`
+      : `${member.captionName} is no longer marked as you.`
+  );
+}
+
 async function toggleMember(userId, on) {
   const ids = new Set(state.members.filter((m) => m.selected).map((m) => m.id));
   if (on) ids.add(userId);
@@ -433,6 +749,7 @@ async function toggleMember(userId, on) {
   const member = state.members.find((m) => m.id === userId);
   if (member) member.selected = on;
   renderMembers();
+  syncMic();
 
   await window.chatterlayer.setSelected([...ids]);
   log(`${member ? member.displayName : userId} — captioning ${on ? 'on' : 'off'}`);
@@ -553,14 +870,19 @@ function handleEvent(msg) {
   switch (msg.type) {
     case 'status':
       if (msg.state === 'joined') {
-        setTally('onair', 'On air');
         state.running = true;
+        renderLive();
+        renderSource();
         el.start.disabled = true;
         el.stop.disabled = false;
-        log(`Joined ${msg.guildName} / #${msg.channelName}`);
+        log(msg.source === 'mic' ? msg.message : `Joined ${msg.guildName} / #${msg.channelName}`);
+        syncMic();
       } else if (msg.state === 'error') {
         setTally('fault', 'Fault');
         state.running = false;
+        renderLive();
+        renderSource();
+        syncMic();
         el.start.disabled = false;
         el.stop.disabled = true;
         log(msg.message, 'error');
@@ -573,6 +895,9 @@ function handleEvent(msg) {
         state.members = [];
         renderMembers();
         renderModelPath();
+        renderLive();
+        renderSource();
+        syncMic();
         el.start.disabled = false;
         el.stop.disabled = true;
         log(msg.message);
@@ -587,10 +912,17 @@ function handleEvent(msg) {
         ...state.discord,
         auth: msg.state,
         botTag: msg.botTag || state.discord.botTag,
+        botId: msg.botId || state.discord.botId,
         message: msg.message || '',
       };
       // No session, nothing to pick from.
-      if (msg.state === 'error' || msg.state === 'signed-out') state.discord.guilds = [];
+      if (msg.state === 'error' || msg.state === 'signed-out') {
+        state.discord.guilds = [];
+        state.discord.botId = null;
+      }
+      // The main process saved the token before signing in with it. Without
+      // this the field would forget there is one the moment it's emptied.
+      if (msg.state === 'signed-in' && state.config) state.config.hasToken = true;
       renderAuth();
       renderGuilds();
       // A failed background sign-in is a nuisance, not a fault — the tally
@@ -599,19 +931,53 @@ function handleEvent(msg) {
       else if (msg.message) log(msg.message);
       return;
 
-    case 'guilds':
+    case 'guilds': {
+      const before = state.discord.guilds || [];
       state.discord = {
         ...state.discord,
         guilds: msg.guilds,
         botTag: msg.botTag || state.discord.botTag,
+        botId: msg.botId || state.discord.botId,
       };
       renderAuth();
       renderGuilds();
+
+      if (!msg.auto) {
+        log(
+          msg.guilds.length
+            ? `${msg.guilds.length} server${msg.guilds.length === 1 ? '' : 's'} with voice channels.`
+            : 'The bot is not in any server with a voice channel yet.'
+        );
+        return;
+      }
+      // Discord changed something by itself. A renamed channel needs no
+      // announcement; a server arriving or leaving does.
+      const had = new Set(before.map((g) => g.id));
+      const has = new Set(msg.guilds.map((g) => g.id));
+      for (const g of msg.guilds) if (!had.has(g.id)) log(`The bot can now reach ${g.name}.`);
+      for (const g of before) if (!has.has(g.id)) log(`${g.name} is no longer in the server list.`);
+      return;
+    }
+
+    case 'paused':
+      state.paused = msg.paused;
+      renderLive();
       log(
-        msg.guilds.length
-          ? `${msg.guilds.length} server${msg.guilds.length === 1 ? '' : 's'} with voice channels.`
-          : 'The bot is not in any server with a voice channel yet.'
+        msg.paused
+          ? 'Captions paused — still in the call, but nothing goes out. The overlay was cleared.'
+          : 'Captions resumed.',
+        msg.paused ? 'warn' : 'info'
       );
+      return;
+
+    case 'cleared':
+      clearMonitor();
+      return;
+
+    case 'overlays':
+      state.overlays = { local: msg.local, remote: msg.remote };
+      renderOverlays();
+      renderSetup();
       return;
 
     case 'speech':
@@ -745,6 +1111,7 @@ function renderModels() {
     el.modelList.hidden = false;
     el.manageModels.textContent = 'Hide';
     renderModelPath();
+    renderSetup();
     return;
   }
 
@@ -762,6 +1129,7 @@ function renderModels() {
   // Covers install, remove, and every getState refresh — all of which can change
   // what is selected without anyone touching the dropdown.
   renderModelPath();
+  renderSetup();
 }
 
 /**
@@ -800,8 +1168,59 @@ function suggestionLine() {
   }
 
   const specs = `${suggestion.ramGB} GB RAM, ${suggestion.cpuThreads} CPU threads`;
-  li.append(`For this PC (${specs}): `, name, why);
+  const text = document.createElement('span');
+  text.append(`For this PC (${specs}): `, name, why);
+  li.append(text);
+
+  if (!pick.installed) {
+    const get = document.createElement('button');
+    get.className = 'btn btn-sm btn-primary';
+    get.textContent = fetchingSuggested ? 'Downloading…' : `Download ${pick.label}`;
+    get.disabled = fetchingSuggested;
+    get.addEventListener('click', downloadSuggested);
+    li.append(get);
+  }
   return li;
+}
+
+/** True while the one-click download is running, so it can't be started twice. */
+let fetchingSuggested = false;
+
+/**
+ * The first-run shortcut: fetch the model this PC was matched to without
+ * reading the list. Drives that model's own row, so progress shows where it
+ * always does.
+ */
+async function downloadSuggested() {
+  const pick = suggestedModel();
+  if (!pick || pick.installed || fetchingSuggested) return;
+
+  el.modelList.hidden = false;
+  el.manageModels.textContent = 'Hide';
+  const rowButton = el.modelList.querySelector(
+    `.model-row[data-model="${CSS.escape(pick.key)}"] .model-action button`
+  );
+  // Already downloading from its own row.
+  if (!rowButton || rowButton.disabled) return;
+
+  fetchingSuggested = true;
+  for (const b of el.modelList.querySelectorAll('.model-suggest button')) {
+    b.disabled = true;
+    b.textContent = 'Downloading…';
+  }
+  renderSetup();
+  try {
+    await downloadModelRow(pick, rowButton);
+  } finally {
+    fetchingSuggested = false;
+    // Success redraws the catalogue; a failure leaves the Retry on the row
+    // and puts this button back.
+    for (const b of el.modelList.querySelectorAll('.model-suggest button')) {
+      b.disabled = false;
+      b.textContent = `Download ${pick.label}`;
+    }
+    renderSetup();
+  }
 }
 
 /** Catalogue rows: download / installed / remove, with a progress bar. */
@@ -889,6 +1308,7 @@ async function renderModelCatalog() {
   // renderModels() runs first and has no catalogue to describe the selection
   // from yet, so the note is filled in once it arrives.
   updateModelNote();
+  renderSetup();
 }
 
 async function downloadModelRow(model, button) {
@@ -1126,17 +1546,177 @@ function renderShare(extra = {}) {
   setNote(SHARE_NOTE_DEFAULT);
 }
 
+// --------------------------------------------------------- setup path --
+
+/**
+ * The first run, lamp by lamp, in the order signal travels. Each is read from
+ * state the app already has rather than tracked separately, so a lamp can't
+ * claim something is done that isn't.
+ */
+const SETUP_STEPS = ['model', 'token', 'server', 'channel', 'obs'];
+
+function setupStatus() {
+  return {
+    model: (state.models || []).length > 0,
+    token: state.discord.auth === 'signed-in',
+    server: (state.discord.guilds || []).length > 0,
+    channel: Boolean(effectiveChannelId()),
+    obs: state.overlays.local > 0,
+  };
+}
+
+/** What to say, and offer, for the first unlit step. */
+function setupNext(step) {
+  const pick = suggestedModel();
+  switch (step) {
+    case 'model':
+      if (fetchingSuggested) return { hint: `Downloading ${pick ? pick.label : 'the model'}…` };
+      return pick
+        ? {
+            hint: `${pick.label} suits this PC. Nothing captions until a speech model is installed.`,
+            action: { label: `Download ${pick.label}`, run: downloadSuggested },
+          }
+        : { hint: 'Download a speech model from the list below.' };
+    case 'token':
+      return {
+        hint:
+          state.discord.auth === 'error'
+            ? 'Sign-in failed — check the bot token in Source.'
+            : 'Paste your Discord bot token into Source. It signs in by itself.',
+        action: { label: 'How do I make a bot?', run: openBotGuide },
+      };
+    case 'server':
+      return {
+        hint: 'The bot isn’t in a server with a voice channel yet.',
+        action: state.discord.botId ? { label: 'Invite the bot', run: openInvite } : null,
+      };
+    case 'channel':
+      return {
+        hint: 'Choose the voice channel to caption in Source.',
+        action: { label: 'Choose channel', run: () => el.voiceChannel.focus() },
+      };
+    default:
+      return {
+        hint: 'In OBS, add a Browser source with the overlay URL from Output, sized to your canvas.',
+        action: { label: 'Copy overlay URL', run: copyOverlayUrl },
+      };
+  }
+}
+
+let setupAction = null;
+/** Guards the one config write that retires the checklist. */
+let setupRetired = false;
+
+function renderSetup() {
+  if (!state.config || state.config.setupDone || setupRetired) {
+    el.setup.hidden = true;
+    return;
+  }
+
+  el.setup.dataset.source = currentSource();
+  // The mic alone needs no bot, server or channel.
+  const steps =
+    currentSource() === 'mic' ? SETUP_STEPS.filter((s) => s === 'model' || s === 'obs') : SETUP_STEPS;
+  const done = setupStatus();
+  const next = steps.find((step) => !done[step]);
+  if (!next) {
+    log('Setup complete — every lamp is lit. Captions go out as soon as someone speaks.');
+    retireSetup();
+    return;
+  }
+
+  el.setup.hidden = false;
+  for (const li of el.setupPath.children) {
+    const step = li.dataset.step;
+    li.dataset.state = done[step] ? 'done' : step === next ? 'next' : '';
+  }
+  const lit = steps.filter((step) => done[step]).length;
+  el.setupMeta.textContent = `${lit} of ${steps.length}`;
+
+  const { hint, action } = setupNext(next);
+  el.setupHint.textContent = hint;
+  setupAction = action ? action.run : null;
+  el.setupAction.hidden = !action;
+  if (action) el.setupAction.textContent = action.label;
+}
+
+/** Gone for good: not back when OBS closes, nor after an update. */
+async function retireSetup() {
+  el.setup.hidden = true;
+  if (setupRetired) return;
+  setupRetired = true;
+  state.config = await window.chatterlayer.updateConfig({ setupDone: true });
+}
+
+function openBotGuide() {
+  window.chatterlayer.openExternal(BOT_GUIDE_URL);
+}
+
+async function copyOverlayUrl() {
+  const url = el.urlOverlay.textContent;
+  if (!url || url === '—') return;
+  await window.chatterlayer.copy(url);
+  log('Overlay URL copied — paste it into a Browser source in OBS.');
+}
+
+// ------------------------------------------------------------- overlays --
+
+/**
+ * The server sees OBS connect, so the app can say so rather than leaving
+ * people to alt-tab and check. A browser on this PC opening the URL counts
+ * too, which is fine: it's the same page OBS would get.
+ */
+function renderOverlays() {
+  const n = state.overlays.local;
+  el.obsMeta.dataset.on = n ? '1' : '0';
+  el.obsMeta.textContent = !n ? 'OBS not connected' : n === 1 ? 'OBS connected' : `${n} sources connected`;
+  el.obsMeta.title = n
+    ? 'A browser source on this PC is showing the overlay right now.'
+    : 'Nothing on this PC has the overlay open. Add the URL below to OBS as a Browser source.';
+}
+
+// ------------------------------------------------------------ what's new --
+
+function renderWhatsNew() {
+  const notes = state.whatsNew;
+  el.whatsNew.hidden = !(notes && notes.length);
+  if (el.whatsNew.hidden) return;
+
+  el.whatsNewTitle.textContent = `What’s new in v${notes[0].version}`;
+  el.whatsNewBody.replaceChildren();
+  for (const release of notes) {
+    // Several versions at once only happens after skipping an update, and then
+    // it matters which change came when.
+    if (notes.length > 1) {
+      const head = document.createElement('h3');
+      head.className = 'news-version';
+      head.textContent = `v${release.version}`;
+      el.whatsNewBody.appendChild(head);
+    }
+    const list = document.createElement('ul');
+    list.className = 'news';
+    for (const item of release.items) {
+      const li = document.createElement('li');
+      li.textContent = item;
+      list.appendChild(li);
+    }
+    el.whatsNewBody.appendChild(list);
+  }
+}
+
 async function init() {
   state = { ...state, ...(await window.chatterlayer.getState()) };
   const c = state.config;
 
   el.channel.value = c.channelId || '';
+  renderSource();
+  renderMics();
+  el.micSensitivity.value = c.mic.sensitivity;
+  el.micHang.value = c.mic.hangMs;
+  syncGateLabels();
   renderAuth();
   renderGuilds();
-  if (c.hasToken) {
-    el.token.value = '••••••••••••••••••••••••';
-    el.token.dataset.masked = '1';
-  }
+  if (c.hasToken) maskToken();
   el.tokenHint.textContent = c.tokenEncrypted
     ? 'Encrypted by your OS keystore.'
     : 'No OS keystore here — the token is stored in plain text. Keep the config file private.';
@@ -1151,10 +1731,23 @@ async function init() {
   el.filterCustom.value = (c.filter.custom || []).join('\n');
   el.checkUpdates.checked = c.updates.check;
   el.closeToTray.checked = c.tray.closeToTray;
+  for (const radio of el.theme.querySelectorAll('input')) {
+    radio.checked = radio.value === c.appearance.theme;
+  }
+  el.launchAtLogin.checked = c.startup.atLogin;
+  // Electron has no login items on Linux.
+  el.loginRow.hidden = state.platform === 'linux';
+  el.hotkeysEnabled.checked = c.hotkeys.enabled;
+  el.hotkeysHint.textContent =
+    `${state.hotkeys.pause} pauses or resumes captions, ${state.hotkeys.clear} clears them. ` +
+    'They work while a game has focus, and take those keys from every other app.';
+  renderLive();
   syncFaderLabels();
 
   if (state.urls && state.urls.overlay) el.urlOverlay.textContent = state.urls.overlay;
   renderShare();
+  renderOverlays();
+  renderWhatsNew();
 
   renderModels();
   renderModelCatalog();
@@ -1176,12 +1769,24 @@ el.toggleToken.addEventListener('click', () => {
   el.toggleToken.textContent = showing ? 'Show' : 'Hide';
 });
 
+/** Stands in for a saved token, which never comes back to the renderer. */
+function maskToken() {
+  el.token.value = '••••••••••••••••••••••••';
+  el.token.dataset.masked = '1';
+}
+
 // Clear the mask on first edit so the placeholder is never saved as a token.
 el.token.addEventListener('focus', () => {
   if (el.token.dataset.masked) {
     el.token.value = '';
     delete el.token.dataset.masked;
   }
+});
+
+// Clicking in and back out without typing must not leave the field looking
+// wiped: the saved token is still there, so the dots come back.
+el.token.addEventListener('blur', () => {
+  if (!el.token.value.trim() && state.config && state.config.hasToken) maskToken();
 });
 
 /**
@@ -1233,6 +1838,53 @@ el.start.addEventListener('click', async () => {
   }
 });
 
+el.source.addEventListener('change', async (e) => {
+  const source = e.target.value;
+  state.config = await window.chatterlayer.updateConfig({ source });
+  // Choosing the mic is asking for it to be captioned; its switch starts on.
+  const selected = state.config.selected || [];
+  if (source !== 'discord' && !selected.includes('mic')) {
+    state.config.selected = await window.chatterlayer.setSelected([...selected, 'mic']);
+  }
+  renderSource();
+  renderSetup();
+  log(
+    {
+      discord: 'Source: the Discord call.',
+      mic: 'Source: your mic only. ChatterLayer won’t sign in to Discord for this.',
+      both: 'Source: the Discord call and your mic.',
+    }[source]
+  );
+  // The launch sign-in was skipped while only the mic was in use; the pickers
+  // need it back now.
+  const d = state.discord.auth;
+  if (source !== 'mic' && state.config.hasToken && d !== 'signed-in' && d !== 'signing-in') {
+    signIn();
+  }
+});
+
+el.micDevice.addEventListener('change', async () => {
+  state.config = await window.chatterlayer.updateConfig({
+    mic: { ...state.config.mic, deviceId: el.micDevice.value },
+  });
+  // A live capture moves to the new mic straight away.
+  if (mic) {
+    stopMic();
+    syncMic();
+  }
+});
+
+for (const input of [el.micSensitivity, el.micHang]) {
+  input.addEventListener('input', () => {
+    syncGateLabels();
+    saveMicGate();
+  });
+}
+
+navigator.mediaDevices.addEventListener('devicechange', () => {
+  if (state.config) renderMics();
+});
+
 el.stop.addEventListener('click', async () => {
   el.stop.disabled = true;
   await window.chatterlayer.stop();
@@ -1250,7 +1902,7 @@ for (const box of [el.showPartials, el.showNames]) {
     saveOverlay();
   });
 }
-el.port.addEventListener('input', savePort);
+el.port.addEventListener('change', savePort);
 el.filterEnabled.addEventListener('change', () => {
   saveFilter();
   log(
@@ -1292,6 +1944,30 @@ el.toggleManual.addEventListener('click', () => {
 el.channel.addEventListener('change', () =>
   window.chatterlayer.updateConfig({ channelId: el.channel.value.trim() })
 );
+el.channel.addEventListener('input', renderSetup);
+
+el.botGuide.addEventListener('click', openBotGuide);
+el.inviteBot.addEventListener('click', openInvite);
+
+el.setupAction.addEventListener('click', () => {
+  if (setupAction) setupAction();
+});
+el.setupHide.addEventListener('click', () => {
+  retireSetup();
+  log('Setup checklist hidden.');
+});
+
+el.whatsNewClose.addEventListener('click', () => {
+  el.whatsNew.hidden = true;
+  state.whatsNew = null;
+  window.chatterlayer.dismissWhatsNew();
+});
+el.whatsNewNotes.addEventListener('click', () =>
+  window.chatterlayer.openExternal(
+    `https://github.com/ruptz/ChatterLayer/releases/tag/v${state.version}`
+  )
+);
+el.whatsNewKofi.addEventListener('click', () => window.chatterlayer.openExternal(KOFI_URL));
 
 el.manageModels.addEventListener('click', () => {
   el.modelList.hidden = !el.modelList.hidden;
@@ -1318,15 +1994,39 @@ for (const btn of document.querySelectorAll('[data-copy]')) {
   });
 }
 
-el.clear.addEventListener('click', async () => {
-  await window.chatterlayer.clearCaptions();
+el.testCaption.addEventListener('click', async () => {
+  const { local, paused } = await window.chatterlayer.testCaption();
+  if (paused) {
+    log('Captions are paused, so the test caption went nowhere. Resume to send one.', 'warn');
+  } else if (!local) {
+    log('Test caption sent, but no OBS source is connected — only the Monitor shows it.', 'warn');
+  }
+});
+
+el.report.addEventListener('click', async () => {
+  try {
+    await window.chatterlayer.reportProblem(el.log.textContent);
+    log('Opened a bug report in your browser. Read it over before you submit — nothing is sent until you do.');
+  } catch (err) {
+    log(`Couldn't open the bug report: ${err.message}`, 'error');
+  }
+});
+
+/** The monitor's half of Clear; the main process wipes the overlay. */
+function clearMonitor() {
   el.preview.replaceChildren();
   const empty = document.createElement('p');
   empty.className = 'empty';
   empty.textContent = 'Cleared.';
   el.preview.appendChild(empty);
   partials.clear();
-});
+}
+
+// The main process answers with a `cleared` event, which is also what the
+// Clear hotkey sends, so both paths empty the monitor the same way.
+el.clear.addEventListener('click', () => window.chatterlayer.clearCaptions());
+
+el.pause.addEventListener('click', () => window.chatterlayer.setPaused(!state.paused));
 
 el.shareEnabled.addEventListener('change', async () => {
   const on = el.shareEnabled.checked;
@@ -1405,12 +2105,32 @@ el.closeToTray.addEventListener('change', async () => {
   );
 });
 
+// The main process owns the switch itself (nativeTheme), which is what the
+// stylesheet's prefers-color-scheme follows, so this only has to save it.
+el.theme.addEventListener('change', async (e) => {
+  state.config = await window.chatterlayer.updateConfig({ appearance: { theme: e.target.value } });
+});
+
+el.launchAtLogin.addEventListener('change', async () => {
+  const on = el.launchAtLogin.checked;
+  state.config = await window.chatterlayer.updateConfig({ startup: { atLogin: on } });
+  log(
+    on
+      ? 'ChatterLayer will start with the computer, in the tray, signed in and waiting.'
+      : 'ChatterLayer will no longer start with the computer.'
+  );
+});
+
+el.hotkeysEnabled.addEventListener('change', async () => {
+  const on = el.hotkeysEnabled.checked;
+  state.config = await window.chatterlayer.updateConfig({ hotkeys: { enabled: on } });
+  log(on ? `Global hotkeys on: ${state.hotkeys.pause} pause/resume, ${state.hotkeys.clear} clear.` : 'Global hotkeys off.');
+});
+
 el.reveal.addEventListener('click', () => window.chatterlayer.revealConfig());
 el.clearLog.addEventListener('click', () => el.log.replaceChildren());
 
-el.donate.addEventListener('click', () =>
-  window.chatterlayer.openExternal('https://ko-fi.com/ruptz')
-);
+el.donate.addEventListener('click', () => window.chatterlayer.openExternal(KOFI_URL));
 
 el.build.addEventListener('click', () =>
   window.chatterlayer.openExternal(
@@ -1439,6 +2159,7 @@ window.chatterlayer.onCaption(addCaption);
 window.chatterlayer.onMembers((members) => {
   state.members = members;
   renderMembers();
+  syncMic();
 });
 
 init();

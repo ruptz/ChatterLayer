@@ -757,6 +757,141 @@ testAsync('a failed Connect releases the model it loaded', async () => {
   }
 });
 
+testAsync('mic only: no sign-in, the mic is a speaker, and its audio is gated', async () => {
+  const { ChatterLayerEngine, MIC_ID } = require('../src/engine/engine');
+  const events = [];
+  const engine = new ChatterLayerEngine((m) => events.push(m));
+  engine.signIn = async () => {
+    throw new Error('mic-only must never sign in to Discord');
+  };
+  const posted = [];
+  engine.startWorker = async function () {
+    this.worker = { postMessage: (m) => posted.push(m), terminate() {} };
+    this.workerReady = true;
+  };
+  engine.setSelected([MIC_ID]);
+  await engine.start({ source: 'mic', modelPath: 'm' });
+
+  assert.ok(events.some((e) => e.type === 'status' && e.state === 'joined'));
+  const members = events.filter((e) => e.type === 'members').pop();
+  assert.deepStrictEqual(
+    members.members.map((m) => m.id),
+    [MIC_ID]
+  );
+  assert.ok(posted.some((m) => m.type === 'add' && m.userId === MIC_ID));
+
+  const speech = Buffer.from(micTone(0.6, 6000).buffer);
+  const silence = Buffer.alloc(16000 * 2);
+  engine.micAudio(silence);
+  assert.ok(!posted.some((m) => m.type === 'audio'), 'silence reached the model');
+  engine.micAudio(speech);
+  engine.micAudio(silence);
+  assert.ok(posted.some((m) => m.type === 'audio' && m.userId === MIC_ID));
+  assert.ok(posted.some((m) => m.type === 'flush' && m.userId === MIC_ID));
+  await engine.leave({ announce: false });
+});
+
+test('both: the streamer’s Discord audio is skipped while their mic covers them', () => {
+  const { ChatterLayerEngine, MIC_ID } = require('../src/engine/engine');
+  const engine = new ChatterLayerEngine(() => {});
+  const subscribed = [];
+  engine.receiver = {
+    subscribe(id) {
+      subscribed.push(id);
+      throw new Error('stop here'); // only whether it was asked matters
+    },
+  };
+  engine.worker = { postMessage() {} };
+  engine.workerReady = true;
+  engine.micSource = true;
+  engine.meId = 'me-1';
+  // Their Discord stream was already up when the mic came on.
+  engine.streams.set('me-1', {});
+
+  engine.setSelected([MIC_ID, 'me-1']);
+  assert.ok(!engine.streams.has('me-1'), 'their Discord stream is still being captured');
+  assert.ok(!subscribed.includes('me-1'));
+  assert.strictEqual(engine.liveCount(), 1);
+
+  // Mic off: Discord is how they're heard again.
+  assert.throws(() => engine.setSelected(['me-1']), /stop here/);
+  assert.deepStrictEqual(subscribed, ['me-1']);
+});
+
+// --- mic gate ------------------------------------------------------------
+
+const { MicGate } = require('../src/engine/mic-gate');
+
+/** 16 kHz mono, a 300 Hz tone at the given amplitude. */
+function micTone(seconds, amp) {
+  const out = new Int16Array(Math.round(16000 * seconds));
+  for (let i = 0; i < out.length; i++) {
+    out[i] = Math.round(Math.sin((2 * Math.PI * 300 * i) / 16000) * amp);
+  }
+  return out;
+}
+
+function micNoise(seconds, amp) {
+  const out = new Int16Array(Math.round(16000 * seconds));
+  let seed = 7;
+  for (let i = 0; i < out.length; i++) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    out[i] = Math.round(((seed / 0x7fffffff) * 2 - 1) * amp);
+  }
+  return out;
+}
+
+/** Feed in 100 ms chunks, the size the window sends. */
+function gateRun(gate, pcm) {
+  let voiced = 0;
+  let ends = 0;
+  for (let at = 0; at < pcm.length; at += 1600) {
+    const r = gate.push(pcm.subarray(at, at + 1600));
+    voiced += r.voiced.reduce((n, f) => n + f.length, 0);
+    if (r.ended) ends++;
+  }
+  return { voiced, ends };
+}
+
+test('mic gate: room noise alone never opens it', () => {
+  const r = gateRun(new MicGate(), micNoise(5, 120));
+  assert.strictEqual(r.voiced, 0);
+  assert.strictEqual(r.ends, 0);
+});
+
+test('mic gate: speech passes with its lead-in, and a pause ends it once', () => {
+  const gate = new MicGate({ preRollMs: 300, hangMs: 700 });
+  gateRun(gate, micNoise(1, 120));
+  const r = gateRun(gate, new Int16Array([...micTone(1, 6000), ...micNoise(1.5, 120)]));
+  assert.strictEqual(r.ends, 1);
+  // The whole second of speech, plus lead-in and the tail before the gate shut.
+  assert.ok(r.voiced >= 16000 + 4000, `only ${r.voiced} samples passed`);
+  assert.ok(r.voiced < 16000 * 2.5, `${r.voiced} samples passed — the gate never shut`);
+});
+
+test('mic gate: the sensitivity slider decides whether quiet speech gets through', () => {
+  // About -50 dBFS: under the default threshold, over the most sensitive one.
+  const quiet = new Int16Array([...micTone(1, 140), ...new Int16Array(16000)]);
+  assert.strictEqual(gateRun(new MicGate({ sensitivity: 1 }), quiet).voiced, 0);
+  assert.strictEqual(gateRun(new MicGate({ sensitivity: 5 }), quiet).voiced, 0);
+  assert.ok(gateRun(new MicGate({ sensitivity: 10 }), quiet).voiced > 16000);
+});
+
+test('mic gate: a longer pause setting holds the line open, retuned live', () => {
+  const gate = new MicGate({ hangMs: 300 });
+  const words = new Int16Array([...micTone(0.5, 6000), ...new Int16Array(8000), ...micTone(0.5, 6000)]);
+  assert.strictEqual(gateRun(gate, words).ends, 1, 'a 0.5s gap should split at 0.3s');
+  gate.configure({ hangMs: 1000 });
+  assert.strictEqual(gateRun(gate, words).ends, 0, 'a 0.5s gap should not split at 1s');
+});
+
+test('mic gate: a steady loud hum is learned as the room', () => {
+  const gate = new MicGate();
+  gateRun(gate, micNoise(20, 900));
+  const later = gateRun(gate, micNoise(5, 900));
+  assert.strictEqual(later.voiced, 0, 'the gate stays open on a constant hum');
+});
+
 // --- renderer wiring -----------------------------------------------------
 
 console.log('\nrenderer');
@@ -1801,6 +1936,424 @@ test('override values are clamped and junk is ignored', () => {
   assert.strictEqual(runOverlay('?size=0').push({ fontSize: 30 }), '8px');
   assert.strictEqual(runOverlay('?size=big').push({ fontSize: 30 }), '30px');
   assert.strictEqual(runOverlay('?nonsense=1').push({ fontSize: 30 }), '30px');
+});
+
+// --- first run -----------------------------------------------------------
+
+console.log('\nfirst run');
+
+testAsync('the pickers refresh themselves, once per burst of Discord events', async () => {
+  const { EventEmitter } = require('events');
+  const sent = [];
+  const engine = new ChatterLayerEngine((m) => sent.push(m));
+  const client = Object.assign(new EventEmitter(), {
+    isReady: () => true,
+    user: { id: 'user-id', tag: 'Bot#0001' },
+    application: { id: 'app-id' },
+    guilds: { cache: new Map() },
+  });
+  engine.client = client;
+  engine.watchGuilds(client);
+
+  // Being invited delivers the server and then each of its channels.
+  client.emit('guildCreate');
+  client.emit('channelCreate');
+  client.emit('channelCreate');
+  await new Promise((r) => setTimeout(r, 700));
+  const trees = sent.filter((m) => m.type === 'guilds');
+  assert.strictEqual(trees.length, 1, `expected one refresh, got ${trees.length}`);
+  assert.strictEqual(trees[0].auto, true, 'a refresh Discord caused must be marked auto');
+  assert.strictEqual(trees[0].botId, 'app-id', 'the invite needs the application id');
+
+  // A session replaced since (a new token) must not publish its stale tree.
+  engine.client = Object.assign(new EventEmitter(), client);
+  client.emit('channelDelete');
+  await new Promise((r) => setTimeout(r, 700));
+  assert.strictEqual(sent.filter((m) => m.type === 'guilds').length, 1);
+});
+
+test('the invite asks for View Channel and Connect, and nothing else', () => {
+  const js = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'renderer.js'), 'utf8');
+  const perms = BigInt(js.match(/INVITE_PERMISSIONS = (\d+)/)[1]);
+  const F = PermissionsBitField.Flags;
+  assert.strictEqual(perms, F.ViewChannel | F.Connect);
+  assert.ok(/discord\.com\/oauth2\/authorize\?client_id=/.test(js));
+  assert.ok(/scope=bot&permissions=/.test(js));
+});
+
+test('a saved token’s mask comes back when the field is left empty', () => {
+  const js = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'renderer.js'), 'utf8');
+  const blur = js.match(/el\.token\.addEventListener\('blur'[\s\S]*?\n\}\);/);
+  assert.ok(blur, 'the token field needs a blur handler');
+  assert.ok(/hasToken/.test(blur[0]) && /maskToken\(\)/.test(blur[0]));
+  // hasToken is only sent at launch, so a token first pasted this session has
+  // to be noted when it signs in or the mask would never return for it.
+  assert.ok(/state === 'signed-in'[^\n]*hasToken = true/.test(js));
+});
+
+test('placeholder options carry an empty value, never their dash', () => {
+  const js = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'renderer.js'), 'utf8');
+  const fn = js.match(/function placeholder\(text\) \{[\s\S]*?\n\}/)[0];
+  assert.ok(/opt\.value = ''/.test(fn));
+  assert.ok(!/opt\.textContent = '—';\s*\n\s*el\.voiceChannel/.test(js));
+});
+
+testAsync('the server reports OBS connecting and leaving', async () => {
+  await withServer(null, async (s) => {
+    const seen = [];
+    s.on('clients', (c) => seen.push(c));
+    const ws = new WebSocket(`ws://127.0.0.1:${s.port}/`, { headers: localHeaders(s.port) });
+    await new Promise((resolve, reject) => {
+      ws.on('open', resolve);
+      ws.on('error', reject);
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    assert.deepStrictEqual(seen.at(-1), { local: 1, remote: 0 });
+    ws.close();
+    await new Promise((r) => setTimeout(r, 150));
+    assert.deepStrictEqual(seen.at(-1), { local: 0, remote: 0 });
+  });
+});
+
+const { osOption, buildOption, scrubLog, reportUrl, LOG_MAX_CHARS } = require('../src/main/report');
+
+test('the bug report link fills in fields the form really has, with options it offers', () => {
+  if (!yaml) {
+    console.log('        (skipped — js-yaml not installed)');
+    return;
+  }
+  const form = yaml.load(
+    fs.readFileSync(path.join(__dirname, '..', '.github', 'ISSUE_TEMPLATE', 'bug_report.yml'), 'utf8')
+  );
+  const fields = new Map(form.body.filter((f) => f.id).map((f) => [f.id, f]));
+  const options = (id) => fields.get(id).attributes.options;
+
+  const url = new URL(
+    reportUrl({ version: '0.4.0', os: 'Windows 11', build: 'Windows installer (.exe)', model: 'Parakeet TDT 0.6B', log: 'x' })
+  );
+  assert.strictEqual(url.searchParams.get('template'), 'bug_report.yml');
+  for (const key of url.searchParams.keys()) {
+    if (key !== 'template') assert.ok(fields.has(key), `the form has no field "${key}"`);
+  }
+
+  const machines = [
+    { platform: 'win32', release: '10.0.26200', arch: 'x64' },
+    { platform: 'win32', release: '10.0.19045', arch: 'x64' },
+    { platform: 'darwin', release: '24.0.0', arch: 'arm64' },
+    { platform: 'darwin', release: '24.0.0', arch: 'x64' },
+    { platform: 'linux', release: '6.8.0', arch: 'x64' },
+  ];
+  for (const m of machines) assert.ok(options('os').includes(osOption(m)), osOption(m));
+  assert.strictEqual(osOption(machines[0]), 'Windows 11');
+  assert.strictEqual(osOption(machines[1]), 'Windows 10');
+
+  const builds = [
+    buildOption({ platform: 'win32', packaged: true, env: {} }),
+    buildOption({ platform: 'win32', packaged: true, env: { PORTABLE_EXECUTABLE_DIR: 'C:\\x' } }),
+    buildOption({ platform: 'darwin', packaged: true }),
+    buildOption({ platform: 'linux', packaged: true, env: {} }),
+    buildOption({ platform: 'linux', packaged: false }),
+  ];
+  for (const b of builds) assert.ok(options('build').includes(b), b);
+  // No option fits an AppImage, so it is left for them rather than guessed.
+  assert.strictEqual(buildOption({ platform: 'linux', packaged: true, env: { APPIMAGE: '/a' } }), '');
+
+  for (const m of MODEL_CATALOG) {
+    assert.ok(options('model').includes(m.label), `the form has no "${m.label}" option`);
+  }
+  assert.ok(options('model').includes('No model downloaded yet'));
+});
+
+test('the bug report never carries the token, and stays a usable length', () => {
+  const token = `${'M'.repeat(26)}.${'G'.repeat(6)}.${'x'.repeat(38)}`;
+  const log = `[12:00:00] pasted ${token} by mistake\n[12:00:01] secret-share-key here`;
+  const out = scrubLog(log, ['secret-share-key']);
+  assert.ok(!out.includes(token) && !out.includes('secret-share-key'), out);
+  assert.ok(out.includes('[removed]'));
+
+  const long = Array.from({ length: 500 }, (_, i) => `[12:00:00] line ${i} of a long session`).join('\n');
+  const tail = scrubLog(long);
+  assert.ok(tail.length <= LOG_MAX_CHARS);
+  assert.ok(tail.endsWith('line 499 of a long session'), 'the end of the log is the part to keep');
+  assert.ok(tail.startsWith('[12:00:00]'), 'cut on a line boundary');
+  assert.ok(reportUrl({ version: '0.4.0', log: tail }).length < 8000, 'GitHub refuses longer URLs');
+});
+
+const { isSafeExternalUrl } = require('../src/main/links');
+
+test('the window can only open https links, never programs or files', () => {
+  for (const ok of [
+    'https://ko-fi.com/chatterlayer',
+    'https://github.com/ruptz/ChatterLayer/releases/tag/v0.4.0',
+    'https://discord.com/oauth2/authorize?client_id=1&scope=bot&permissions=1049600',
+  ]) {
+    assert.ok(isSafeExternalUrl(ok), ok);
+  }
+  // Each of these must be refused; none is ever opened.
+  for (const bad of [
+    'file:///C:/example.exe',
+    'ms-msdt:example',
+    'smb://example/share',
+    'http://example.com',
+    'javascript:alert(1)',
+    'not a url',
+    '',
+    undefined,
+    { toString: () => 'https://x.example' },
+  ]) {
+    assert.ok(!isSafeExternalUrl(bad), String(bad));
+  }
+});
+
+const { whatsNewFor, NOTES } = require('../src/main/whats-new');
+
+test('what’s new shows once after an update, never on a fresh install', () => {
+  const notes = [
+    { version: '0.5.0', items: ['five'] },
+    { version: '0.4.0', items: ['four'] },
+  ];
+  const at = (current, lastSeen, upgraded) =>
+    (whatsNewFor({ current, lastSeen, upgraded, notes }) || []).map((n) => n.version);
+
+  assert.deepStrictEqual(at('0.4.0', '', false), [], 'a fresh install has nothing new');
+  assert.deepStrictEqual(at('0.4.0', '', true), ['0.4.0'], 'upgrading from before it was tracked');
+  assert.deepStrictEqual(at('0.4.0', '0.3.0', true), ['0.4.0']);
+  assert.deepStrictEqual(at('0.4.0', '0.4.0', true), [], 'already seen');
+  assert.deepStrictEqual(at('0.5.0', '0.3.0', true), ['0.5.0', '0.4.0'], 'a skipped update');
+  assert.deepStrictEqual(at('0.4.1', '0.4.0', true), [], 'a hotfix with no notes says nothing');
+  assert.deepStrictEqual(at('0.3.0', '0.4.0', true), [], 'a downgrade says nothing');
+
+  for (const n of NOTES) {
+    assert.ok(/^\d+\.\d+\.\d+$/.test(n.version) && n.items.length, `bad notes entry ${n.version}`);
+  }
+});
+
+test('the launch records what’s new as seen before anyone dismisses it', () => {
+  const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'main', 'main.js'), 'utf8');
+  const boot = main.match(/async function bootstrap\(\) \{[\s\S]*?\n\}/)[0];
+  assert.ok(/whatsNewFor\(/.test(boot));
+  assert.ok(/lastSeenVersion: app\.getVersion\(\)/.test(boot), 'it must be recorded at launch');
+});
+
+test('the theme follows the system by default and is set before the window paints', () => {
+  const { DEFAULTS } = require('../src/main/config');
+  assert.strictEqual(DEFAULTS.appearance.theme, 'system');
+  const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'main', 'main.js'), 'utf8');
+  const ready = main.match(/app\.whenReady\(\)\.then\([\s\S]*?\n {2}\}\);/)[0];
+  assert.ok(
+    ready.indexOf('applyTheme()') !== -1 && ready.indexOf('applyTheme()') < ready.indexOf('createWindow('),
+    'a dark window must not open light and then flip'
+  );
+  const css = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'styles.css'), 'utf8');
+  assert.ok(/@media \(prefers-color-scheme: dark\)/.test(css));
+  const html = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'index.html'), 'utf8');
+  const values = [...html.matchAll(/name="theme" value="(\w+)"/g)].map((m) => m[1]).sort();
+  assert.deepStrictEqual(values, ['dark', 'light', 'system']);
+});
+
+test('a test caption takes the same path as speech', () => {
+  const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'main', 'main.js'), 'utf8');
+  const handler = main.match(/'chatterlayer:testCaption'[\s\S]*?\n\}\);/)[0];
+  assert.ok(/deliverCaption\(/.test(handler));
+  assert.ok(/case 'caption':\s*\n\s*deliverCaption\(msg\)/.test(main));
+});
+
+// --- set it and forget it ------------------------------------------------
+
+console.log('\nrecovery');
+
+const { EventEmitter: Emitter } = require('events');
+const { EngineHost } = require('../src/main/engine-host');
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** An EngineHost whose engine processes are fakes that record what they're told. */
+function fakeHost(restartDelays = [10, 10]) {
+  const children = [];
+  const fork = () => {
+    const child = Object.assign(new Emitter(), {
+      sent: [],
+      stdout: new Emitter(),
+      stderr: new Emitter(),
+      send(m) {
+        this.sent.push(m);
+      },
+      kill() {},
+    });
+    children.push(child);
+    return child;
+  };
+  const host = new EngineHost({ fork, restartDelays });
+  const heard = [];
+  host.on('message', (m) => heard.push(m));
+  return { host, children, heard, crash: (code = 3221225477) => children.at(-1).emit('exit', code) };
+}
+
+testAsync('a crashed engine comes back into the same call with the same people', async () => {
+  const { host, children, heard, crash } = fakeHost();
+  host.signIn('tok');
+  await host.start({ token: 'tok', channelId: 'c1', modelPath: 'm' });
+  host.setSelected(['a', 'b']);
+  host.setFollow('a');
+  // A mod moved the bot; a restart should come back to where it actually was.
+  children[0].emit('message', { type: 'status', state: 'joined', channelId: 'c2' });
+  crash();
+
+  assert.ok(heard.some((m) => m.type === 'status' && m.state === 'connecting'), 'it should say it is on its way back');
+  assert.ok(!heard.some((m) => m.state === 'error'), 'a recoverable crash is not a fault');
+  await wait(40);
+  assert.strictEqual(children.length, 2, 'the engine was not respawned');
+  const types = children[1].sent.map((m) => m.type);
+  assert.deepStrictEqual(types, ['signIn', 'start', 'setSelected', 'setFollow']);
+  assert.strictEqual(children[1].sent[1].channelId, 'c2');
+  assert.deepStrictEqual(children[1].sent[2].userIds, ['a', 'b']);
+});
+
+testAsync('a call the user ended stays ended after a crash', async () => {
+  const { host, children, crash } = fakeHost();
+  host.signIn('tok');
+  await host.start({ token: 'tok', channelId: 'c1' });
+  await host.stop();
+  children[0].emit('message', { type: 'auth', state: 'signed-in' });
+  crash();
+  await wait(40);
+  assert.deepStrictEqual(children[1].sent.map((m) => m.type), ['signIn']);
+});
+
+testAsync('restarts are capped, and the last failure is reported', async () => {
+  const { host, children, heard, crash } = fakeHost([5]);
+  await host.start({ token: 'tok', channelId: 'c1' });
+  crash();
+  await wait(30);
+  assert.strictEqual(children.length, 2);
+  host.running = true;
+  crash();
+  await wait(30);
+  assert.strictEqual(children.length, 2, 'it kept restarting past its budget');
+  assert.ok(heard.some((m) => m.type === 'status' && m.state === 'error' && /Engine stopped/.test(m.message)));
+});
+
+testAsync('quitting never triggers a restart', async () => {
+  const { host, children, crash } = fakeHost();
+  await host.start({ token: 'tok', channelId: 'c1' });
+  const quitting = host.shutdown();
+  crash();
+  await quitting;
+  await wait(30);
+  assert.strictEqual(children.length, 1);
+});
+
+/** An engine in a call, with a voice connection that does what it's told. */
+function engineInCall() {
+  const sent = [];
+  const engine = new ChatterLayerEngine((m) => sent.push(m));
+  engine.rejoinDelays = [5, 5];
+  engine.resumeGraceMs = 20;
+  const guild = { id: 'g1', name: 'Night Shift' };
+  engine.client = { user: { id: 'bot', tag: 'Bot#1' }, users: { cache: new Map() } };
+  engine.channel = fakeChannel({ name: 'stream', guild, members: new Map() });
+  const connection = Object.assign(new Emitter(), {
+    state: { status: 'disconnected' },
+    rejoins: [],
+    succeed: true,
+    rejoin(config) {
+      this.rejoins.push(config || null);
+      if (this.succeed) {
+        setTimeout(() => {
+          this.state = { status: 'ready' };
+          this.emit('ready');
+        }, 1);
+      }
+      return true;
+    },
+    destroy() {
+      this.state = { status: 'destroyed' };
+    },
+  });
+  engine.connection = connection;
+  return { engine, sent, connection, guild };
+}
+
+testAsync('a voice drop is rejoined instead of ending the call', async () => {
+  const { engine, sent, connection } = engineInCall();
+  await engine.onVoiceDisconnected(connection);
+  assert.strictEqual(connection.rejoins.length, 1);
+  assert.ok(sent.some((m) => m.type === 'status' && m.state === 'joined'));
+  assert.ok(!sent.some((m) => m.state === 'disconnected'));
+  assert.strictEqual(engine.connection, connection, 'the call should still be up');
+});
+
+testAsync('a drop that never recovers ends the call and frees the model', async () => {
+  const { engine, sent, connection } = engineInCall();
+  connection.succeed = false;
+  engine.rejoinTimeoutMs = 20;
+  await engine.onVoiceDisconnected(connection);
+  assert.strictEqual(connection.rejoins.length, 2, 'every attempt should have been used');
+  assert.ok(sent.some((m) => m.type === 'status' && m.state === 'disconnected'), 'the call should have ended');
+  assert.strictEqual(engine.connection, null);
+});
+
+testAsync('a bot a moderator disconnected does not force its way back in', async () => {
+  const { engine, sent, connection } = engineInCall();
+  engine.onVoiceStateUpdate({ id: 'bot', channelId: 'c-stream' }, { id: 'bot', channelId: null });
+  await engine.onVoiceDisconnected(connection);
+  assert.strictEqual(connection.rejoins.length, 0);
+  assert.ok(sent.some((m) => m.type === 'status' && m.state === 'disconnected'));
+});
+
+test('the call follows the bot when a moderator moves it', () => {
+  const { engine, sent, guild } = engineInCall();
+  const other = fakeChannel({ name: 'lobby', guild, members: new Map() });
+  engine.onVoiceStateUpdate({ id: 'bot', channelId: 'c-stream' }, { id: 'bot', channelId: other.id, channel: other });
+  assert.strictEqual(engine.channel, other);
+  const joined = sent.filter((m) => m.type === 'status' && m.state === 'joined');
+  assert.strictEqual(joined.at(-1).channelId, 'c-lobby');
+  assert.ok(sent.some((m) => m.type === 'members'));
+});
+
+test('follow mode takes the bot where the followed person goes, and nowhere else', () => {
+  const { engine, connection, guild } = engineInCall();
+  engine.followUserId = 'u1';
+  const move = (id, channel) =>
+    engine.onVoiceStateUpdate(
+      { id, channelId: 'c-stream' },
+      { id, channelId: channel.id, channel, guild: channel.guild, member: { displayName: 'Mika' } }
+    );
+
+  move('u2', fakeChannel({ name: 'elsewhere', guild }));
+  assert.strictEqual(connection.rejoins.length, 0, 'only the followed person is followed');
+
+  move('u1', fakeChannel({ name: 'other-server', guild: { id: 'g2' } }));
+  assert.strictEqual(connection.rejoins.length, 0, 'it never leaves the server');
+
+  move('u1', fakeChannel({ name: 'locked', guild, granted: [F.ViewChannel] }));
+  move('u1', fakeChannel({ name: 'stage', guild, type: ChannelType.GuildStageVoice }));
+  assert.strictEqual(connection.rejoins.length, 0, 'not into a channel it can’t hear');
+
+  move('u1', fakeChannel({ name: 'duo', guild }));
+  assert.deepStrictEqual(connection.rejoins, [{ channelId: 'c-duo', selfDeaf: false, selfMute: true }]);
+  assert.ok(!engine.selected.has('u1'), 'following someone never switches their captions on');
+});
+
+test('pause sends nothing, clears the overlay, and is never saved', () => {
+  const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'main', 'main.js'), 'utf8');
+  const deliver = main.match(/function deliverCaption\(msg\) \{[\s\S]*?\n\}/)[0];
+  assert.ok(/^function deliverCaption\(msg\) \{\n {2}if \(paused\) return;/.test(deliver), 'the gate must come first');
+  const setPaused = main.match(/function setPaused\(on\) \{[\s\S]*?\n\}/)[0];
+  assert.ok(/clearCaptions\(\)/.test(setPaused));
+  assert.ok(!/config\.update\([^)]*paused/.test(main), 'pause must not survive a relaunch');
+});
+
+test('hotkeys, launch at login and follow mode are all off by default', () => {
+  const { DEFAULTS } = require('../src/main/config');
+  assert.strictEqual(DEFAULTS.hotkeys.enabled, false);
+  assert.strictEqual(DEFAULTS.startup.atLogin, false);
+  assert.strictEqual(DEFAULTS.follow.userId, '');
+  const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'main', 'main.js'), 'utf8');
+  const hotkeys = main.match(/function applyHotkeys\(\) \{[\s\S]*?\n\}/)[0];
+  assert.ok(/unregisterAll\(\);\n {2}if \(!config\.data\.hotkeys\.enabled\) return;/.test(hotkeys));
+  // Starting with the computer is still only a Discord sign-in.
+  const boot = main.match(/async function bootstrap\(\) \{[\s\S]*?\n\}/)[0];
+  assert.ok(!/engine\.start\(|tunnel\.start/.test(boot));
 });
 
 // --- result --------------------------------------------------------------
