@@ -1,3 +1,4 @@
+import { DownloadButton } from '@/components/DownloadButton';
 import { Section } from '@/components/Section';
 import { requirements, site } from '@/lib/content';
 
@@ -17,16 +18,15 @@ export function GetIt() {
     >
       <div className="grid gap-x-8 gap-y-12 lg:grid-cols-2">
         <div>
-          <div className="flex flex-wrap items-center gap-6">
-            <a href={site.releasesUrl} className="btn bg-s1 px-7 py-4 text-[1.0625rem] text-ink">
-              Download for Windows, macOS or Linux
-            </a>
-            <a href={site.repoUrl} className="link-underline text-[1.0625rem] font-semibold">
-              Source on GitHub
-            </a>
-          </div>
+          <DownloadButton
+            aside={
+              <a href={site.repoUrl} className="link-underline text-[1.0625rem] font-semibold">
+                Source on GitHub
+              </a>
+            }
+          />
 
-          <p className="note mt-6 max-w-[38rem]">
+          <p className="note mt-6 max-w-152">
             The builds aren&rsquo;t code-signed, because certificates cost money this project
             isn&rsquo;t spending. Windows will show a SmartScreen warning the first time: More
             info, then Run anyway. On macOS the app can clear Gatekeeper&rsquo;s quarantine flag

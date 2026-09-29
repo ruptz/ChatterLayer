@@ -64,6 +64,14 @@
           </button>
 
           <div class="settings-panel" id="settings-panel" hidden>
+            <h3>Appearance</h3>
+            <div class="seg" id="theme" role="radiogroup" aria-label="Appearance">
+              <label><input type="radio" name="theme" value="system" />Match system</label>
+              <label><input type="radio" name="theme" value="light" />Light</label>
+              <label><input type="radio" name="theme" value="dark" />Dark</label>
+            </div>
+            <div class="rule" aria-hidden="true"></div>
+
             <h3>App</h3>
             <label class="check">
               <input type="checkbox" id="close-to-tray" />
@@ -74,8 +82,38 @@
               stray click can&rsquo;t cut your captions mid-stream. Minimising
               is unaffected, and Quit on the tray icon always quits.
             </p>
+
+            <div id="login-row">
+              <label class="check">
+                <input type="checkbox" id="launch-at-login" />
+                Start with the computer, in the tray
+              </label>
+              <p class="help">
+                Signs in to Discord and waits. Nobody is captioned and nothing
+                is shared until you press Connect.
+              </p>
+            </div>
+
+            <label class="check">
+              <input type="checkbox" id="hotkeys-enabled" />
+              Global hotkeys
+            </label>
+            <p class="help" id="hotkeys-hint">
+              Work while a game has focus. They take those keys from every other app.
+            </p>
           </div>
         </div>
+
+        <!-- Only while connected. Stays in the call and sends nothing. -->
+        <button
+          type="button"
+          class="btn btn-sm"
+          id="pause"
+          title="Stay in the call but send nothing to the stream. The overlay is cleared at once."
+          hidden
+        >
+          Pause captions
+        </button>
 
         <div class="status" id="tally" data-state="standby">
           <span class="dot"></span>
@@ -88,15 +126,103 @@
          top, the live strips and the monitor on the left where you watch them,
          and everything you set once down the right-hand rack. -->
     <main>
+      <!-- ------------------------------------------------ what's new -->
+      <!-- Once per update, decided in the main process. Never on a timer. -->
+      <section class="card card-wide card-news" id="whats-new" hidden>
+        <div class="card-head">
+          <h2 id="whats-new-title">What&rsquo;s new</h2>
+          <button type="button" class="btn btn-ghost btn-sm" id="whats-new-close">Got it</button>
+        </div>
+        <div class="card-body">
+          <div id="whats-new-body"></div>
+          <div class="actions bordered">
+            <button type="button" class="linky" id="whats-new-notes">Full release notes</button>
+            <span class="spacer"></span>
+            <span class="help">
+              Free, and it always will be. If it&rsquo;s earned a place on your stream:
+            </span>
+            <button type="button" class="kofi" id="whats-new-kofi" title="Opens ko-fi.com in your browser">
+              Buy me a coffee
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------ setup path -->
+      <!-- The first run, drawn as the signal path it is: every lamp has to
+           light before a word reaches the stream. Gone for good once they all
+           have. -->
+      <section class="card card-wide card-setup" id="setup" hidden>
+        <div class="card-head">
+          <h2>Setup</h2>
+          <span class="meta" id="setup-meta">0 of 5</span>
+        </div>
+        <div class="card-body">
+          <ol class="path" id="setup-path">
+            <li data-step="model"><span class="lamp"></span><span>Speech model</span></li>
+            <li data-step="token" data-discord><span class="lamp"></span><span>Bot signed in</span></li>
+            <li data-step="server" data-discord><span class="lamp"></span><span>Bot in a server</span></li>
+            <li data-step="channel" data-discord><span class="lamp"></span><span>Voice channel</span></li>
+            <li data-step="obs"><span class="lamp"></span><span>OBS connected</span></li>
+          </ol>
+          <div class="actions setup-next">
+            <p class="help" id="setup-hint"></p>
+            <button type="button" class="btn btn-sm btn-primary" id="setup-action" hidden></button>
+            <span class="spacer"></span>
+            <button type="button" class="btn btn-ghost btn-sm" id="setup-hide">Hide</button>
+          </div>
+        </div>
+      </section>
+
       <!-- ------------------------------------------- source (patch bay) -->
-      <section class="card card-source">
+      <section class="card card-source" id="source-card">
         <div class="card-head">
           <h2>Source</h2>
           <span class="meta" id="model-path">Checking model&hellip;</span>
         </div>
         <div class="card-body">
-          <div class="grid-fields">
+          <!-- What feeds the desk: a Discord call, this PC's own mic, or both.
+               Mic alone never signs in to Discord — nothing leaves the PC. -->
+          <div class="source-pick">
             <div class="field">
+              <span class="label" id="source-label">Listen to</span>
+              <div class="seg seg-source" id="source" role="radiogroup" aria-labelledby="source-label">
+                <label><input type="radio" name="source" value="discord" />Discord call</label>
+                <label><input type="radio" name="source" value="mic" />My mic</label>
+                <label><input type="radio" name="source" value="both" />Both</label>
+              </div>
+              <p class="help" id="source-note"></p>
+            </div>
+
+            <div class="field" id="mic-field" hidden>
+              <label class="label" for="mic-device">Microphone</label>
+              <select id="mic-device"></select>
+
+              <!-- The voice gate: what counts as talking, and how long a pause
+                   ends the line. Both apply live, mid-stream. -->
+              <div class="mic-gate">
+                <div class="field">
+                  <label class="label" for="mic-sensitivity">
+                    Sensitivity <em id="v-sensitivity">5</em>
+                  </label>
+                  <input type="range" id="mic-sensitivity" min="1" max="10" step="1" />
+                </div>
+                <div class="field">
+                  <label class="label" for="mic-hang">
+                    Pause ends line <em id="v-hang">0.7s</em>
+                  </label>
+                  <input type="range" id="mic-hang" min="300" max="2000" step="100" />
+                </div>
+              </div>
+              <p class="help" id="mic-note">
+                Keyboard or game audio setting captions off? Lower the
+                sensitivity. Quiet words going missing? Raise it.
+              </p>
+            </div>
+          </div>
+
+          <div class="grid-fields">
+            <div class="field" data-discord>
               <label class="label" for="token">Discord bot token</label>
               <div class="input-row">
                 <input
@@ -109,9 +235,12 @@
                 <button type="button" class="btn btn-sm" id="toggle-token">Show</button>
               </div>
               <p class="help" id="token-hint">Encrypted by your OS keystore.</p>
+              <button type="button" class="linky" id="bot-guide" title="Opens chatterlayer.com in your browser">
+                How do I make a bot?
+              </button>
             </div>
 
-            <div class="field">
+            <div class="field" data-discord>
               <label class="label" for="guild">Server</label>
               <div class="input-row">
                 <select id="guild"></select>
@@ -121,9 +250,20 @@
                 </button>
               </div>
               <p class="help" id="auth-note">Signing in&hellip;</p>
+              <!-- A quiet link once the bot is somewhere; a real button while
+                   it's in no server at all. renderInvite() owns which. -->
+              <button
+                type="button"
+                class="linky"
+                id="invite-bot"
+                title="Opens Discord in your browser, with View Channel and Connect already ticked"
+                hidden
+              >
+                Invite the bot to another server
+              </button>
             </div>
 
-            <div class="field">
+            <div class="field" data-discord>
               <label class="label" for="voice-channel">Voice channel</label>
               <select id="voice-channel"></select>
               <p class="help" id="channel-note">
@@ -143,7 +283,7 @@
             </div>
           </div>
 
-          <div class="manual" id="manual-channel" hidden>
+          <div class="manual" id="manual-channel" data-discord hidden>
             <label class="label" for="channel">Voice channel ID</label>
             <input
               type="text"
@@ -162,7 +302,7 @@
           <!-- The disclosure sits on the same line as the transport, so the
                patch bay ends in one row instead of two half-empty ones. -->
           <div class="actions source-foot">
-            <button type="button" class="linky" id="toggle-manual">
+            <button type="button" class="linky" id="toggle-manual" data-discord>
               Enter a channel ID manually
             </button>
             <span class="spacer"></span>
@@ -217,6 +357,7 @@
         <section class="card">
           <div class="card-head">
             <h2>Output</h2>
+            <span class="meta" id="obs-meta" data-on="0">OBS not connected</span>
           </div>
           <div class="card-body">
             <div class="url">
@@ -268,6 +409,13 @@
                 <input type="checkbox" id="check-updates" />
                 Check for updates
               </label>
+              <button
+                class="btn btn-ghost btn-sm"
+                id="test-caption"
+                title="Puts a line on the overlay the same way speech does, so you can size the source in OBS without being in a call."
+              >
+                Send test caption
+              </button>
               <button class="btn btn-ghost btn-sm" id="clear">Clear captions</button>
               <button class="btn btn-ghost btn-sm" id="reveal">Show config file</button>
             </div>
@@ -366,7 +514,16 @@
         <section class="card">
           <div class="card-head">
             <h2>Log</h2>
-            <button class="btn btn-ghost btn-sm" id="clear-log">Clear</button>
+            <span class="head-actions">
+              <button
+                class="btn btn-ghost btn-sm"
+                id="report"
+                title="Opens a bug report on GitHub with your version, system and this log filled in. Your token is never included, and nothing is sent until you submit it."
+              >
+                Report a problem
+              </button>
+              <button class="btn btn-ghost btn-sm" id="clear-log">Clear</button>
+            </span>
           </div>
           <div class="card-body">
             <pre class="log" id="log"></pre>

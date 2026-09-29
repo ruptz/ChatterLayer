@@ -1,4 +1,5 @@
 import { CaptionStage } from '@/components/CaptionStage';
+import { DownloadButton } from '@/components/DownloadButton';
 import { site } from '@/lib/content';
 
 /** The three things people want to know before they read a word of prose. */
@@ -16,19 +17,20 @@ export function Hero() {
 
         <div className="mt-12 grid12 gap-y-10">
           <div className="col-span-12 lg:col-span-7">
-            <p className="max-w-[34rem] text-[1.1875rem] leading-[1.55] text-ink-2">
+            <p className="max-w-136 text-[1.1875rem] leading-[1.55] text-ink-2">
               ChatterLayer puts a bot in your Discord voice call, transcribes whoever you switch
-              on, and draws their words into OBS in their own colour. The speech never leaves your
-              PC.
+              on, and draws their words into OBS in their own colour. Or skip the bot and caption
+              just your mic. The speech never leaves your PC.
             </p>
 
-            <div className="mt-8 flex flex-wrap items-center gap-5">
-              <a href={site.releasesUrl} className="btn bg-s1 px-7 py-4 text-[1.0625rem] text-ink">
-                Download for free
-              </a>
-              <a href={site.repoUrl} className="link-underline text-[1.0625rem] font-semibold">
-                Source on GitHub
-              </a>
+            <div className="mt-8">
+              <DownloadButton
+                aside={
+                  <a href={site.repoUrl} className="link-underline text-[1.0625rem] font-semibold">
+                    Source on GitHub
+                  </a>
+                }
+              />
             </div>
           </div>
 

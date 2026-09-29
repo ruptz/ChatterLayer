@@ -39,6 +39,8 @@ export function SiteHeader() {
           <div className="flex items-center gap-5">
             {/* A link, not a second button: the page has one filled button and
                 it's Download. The tip jar asks quietly or it doesn't ask. */}
+            {/* Download goes to the section rather than the file, because the
+                file on its own arrives without the SmartScreen steps. */}
             <a
               href={site.kofiUrl}
               className="link-underline text-[0.9375rem] font-semibold text-ink-2 transition-colors hover:text-ink"
@@ -47,7 +49,7 @@ export function SiteHeader() {
             </a>
 
             <a
-              href={site.releasesUrl}
+              href="#download"
               className="btn bg-s2 px-5 py-2.5 text-[0.9375rem] text-ink"
             >
               Download

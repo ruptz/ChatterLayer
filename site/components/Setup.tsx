@@ -46,7 +46,7 @@ export function Setup() {
                   {step.bullets.map((bullet, bulletIndex) => (
                     <li
                       key={bullet}
-                      className={`px-5 py-3 text-[1rem] leading-[1.5] text-ink-2 ${
+                      className={`px-5 py-3 text-[1rem] leading-normal text-ink-2 ${
                         bulletIndex > 0 ? 'border-t-[3px] border-ink' : ''
                       }`}
                     >

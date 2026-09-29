@@ -1,7 +1,7 @@
 # ChatterLayer
 
 Live, colour-coded captions for your Discord voice call, rendered straight into
-OBS.
+OBS. It can caption your own mic too, with or without the call.
 
 **[chatterlayer.com](https://chatterlayer.com)** — what it does, in one page.
 
@@ -26,7 +26,9 @@ it doesn't even need an internet connection to caption.
 
 **Using it**
 
-- [On stream](#on-stream) — who gets captioned, names, colours, caption style
+- [On stream](#on-stream) — call or mic, who gets captioned, names, colours,
+  caption style, pause, follow mode
+- [Leaving it running](#leaving-it-running) — recovery, the tray, hotkeys
 - [Sharing captions with your co-streamers](#sharing-captions-with-your-co-streamers)
 - [Consent — read this one](#consent--read-this-one)
 - [The word filter](#the-word-filter)
@@ -65,7 +67,7 @@ Each person in your call gets their own colour and their own caption line:
 | **OS** | Windows, macOS (Intel or Apple Silicon), or Linux |
 | **Disk** | ~350 MB for the app, plus the speech model you choose (40 MB–2.5 GB) |
 | **RAM** | ~2.6 GB on Parakeet, the pick for PCs with 16 GB; ~570 MB for a 7-person call on Moonshine Base, the pick for lighter machines |
-| **A Discord bot** | Free, takes two minutes — [instructions below](#3-create-your-discord-bot) |
+| **A Discord bot** | Only to caption a call — not for your mic alone. Free, takes two minutes — [instructions below](#3-create-your-discord-bot) |
 | **OBS** | Any recent version |
 
 You do **not** need Node.js, a compiler, Visual Studio, Python, a paid speech
@@ -121,6 +123,10 @@ details and the measured numbers.
 ChatterLayer needs a bot account to sit in your voice channel and listen. This is
 free and takes about two minutes.
 
+> **Only captioning your own mic?** Skip this step and the next. Pick **My mic**
+> under **Listen to** in the Source panel, choose your microphone, and go
+> straight to [step 5](#5-add-the-overlay-to-obs).
+
 1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
    and click **New Application**. Name it whatever you like.
 2. Open the **Bot** tab → **Add Bot**.
@@ -130,20 +136,18 @@ free and takes about two minutes.
 4. **Leave all the Privileged Gateway Intents switched off.** ChatterLayer
    doesn't need them. If "Server Members" or "Message Content" are on, turn them
    off.
-5. Open **OAuth2 → URL Generator** and tick:
-   - **Scopes:** `bot`
-   - **Bot Permissions:** `View Channel` and `Connect`
-     *(it never talks, so it doesn't need `Speak`)*
-6. Open the URL that generates, and invite the bot to your server.
 
-> **Shortcut:** swap your own client ID into this URL and it does the same thing —
-> `https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=1049600&scope=bot`
+Inviting the bot to your server happens from inside ChatterLayer, in the next
+step — no URL Generator needed.
 
 ### 4. Paste your token and pick a channel
 
 Open ChatterLayer and paste your **bot token** into the **Source** panel. It
-signs in, and the **Server** and **Voice channel** dropdowns fill with
-everywhere your bot can go. Pick one and hit **Connect**.
+signs in by itself. Press **Invite the bot to a server**, pick your server on
+the Discord page that opens, and it appears in the **Server** dropdown on its
+own — View Channel and Connect are already ticked, and nothing else is asked
+for (it never talks, so it doesn't need Speak). Pick a **Voice channel** and hit
+**Connect**.
 
 There's no channel ID to copy and no Developer Mode to turn on. ChatterLayer
 also checks permissions while it's listing, so:
@@ -165,9 +169,12 @@ after that ChatterLayer signs in by itself at launch and the dropdowns are ready
 when you open it. Your bot therefore shows as **online in Discord whenever
 ChatterLayer is open**, not only while you're captioning.
 
-> If a channel doesn't show up — a brand-new one, say — hit **Refresh**. There's
-> also an **Enter a channel ID manually** fallback under the picker if you ever
-> need it.
+> The dropdowns keep themselves up to date as the bot joins servers and channels
+> change. **Refresh** is still there if you ever doubt them, and so is an
+> **Enter a channel ID manually** fallback under the picker.
+>
+> Inviting by hand works too: swap your client ID into
+> `https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=1049600&scope=bot`
 
 ### 5. Add the overlay to OBS
 
@@ -181,8 +188,17 @@ ChatterLayer is open**, not only while you're captioning.
    margin, so leaving the source at full canvas size and positioning it at 0,0
    usually just works.
 
+The **OBS connected** light in the Output panel comes on once the source is
+talking to ChatterLayer. Press **Send test caption** to put a line on the
+overlay, so you can size and place it without being in a call.
+
 The overlay reconnects on its own, so you can add the source before ChatterLayer
 is even running, and it survives you restarting the app mid-stream.
+
+Until everything is green, a short **setup checklist** at the top of the app
+tracks model → bot signed in → bot in a server → voice channel → OBS connected
+(on **My mic**, just model and OBS). It hides itself for good once it's done, or
+when you press **Hide**. People updating from an earlier version never see it.
 
 **Nothing is exposed to the internet.** The caption server only listens on
 `127.0.0.1`, which means your own machine and nothing else.
@@ -259,6 +275,26 @@ one. Switching engines needs a reconnect — the model is loaded once, at connec
 
 ## On stream
 
+### Your call, your mic, or both
+
+**Listen to** at the top of the Source panel picks what gets captioned:
+
+| | |
+|---|---|
+| **Discord call** | Everyone in the voice channel you switch on, through the bot. |
+| **My mic** | Just you, straight from your microphone. No bot, no Discord sign-in, nothing leaves your PC. |
+| **Both** | The call and your mic together. |
+
+**Both** exists for one moment that happens constantly on stream: you mute in
+Discord, or let go of push-to-talk, and read chat out. Discord hears nothing, so
+the call alone would miss it. Your mic still hears it. Press **This is me** on
+your own row in the Channels panel and your mic captions you from then on, so
+you never appear twice.
+
+With a mic in play, two sliders tune it live: **Sensitivity** (lower it if
+keyboard or game audio sets captions off; raise it if quiet words go missing)
+and **Pause ends line**, how long a silence finishes a caption.
+
 ### Choosing who gets captioned
 
 The **Channels** panel lists everyone in the voice call with a toggle each.
@@ -269,6 +305,25 @@ as often as you like — nothing reconnects and nothing drops.
 
 Nobody is captioned by default. That's deliberate; see
 [Consent](#consent--read-this-one).
+
+### Pause captions
+
+**Pause captions** (next to the status light while connected) keeps the bot in
+the call but sends nothing to the stream, and clears the overlay at once. It's
+the privacy panic button — for a phone call, a private conversation, or anything
+that shouldn't be on screen. It's also on the tray menu and, if you turn them
+on, a hotkey. **Resume captions** picks up where you left off.
+
+### Follow mode
+
+Press **Follow** on someone's row and the bot moves with them when they hop
+between voice channels in that server. Handy when you *are* that someone. It's
+off until you press it, it stays within the one server, and it skips stage
+channels and any channel the bot can't join, saying so in the Log. Following
+someone doesn't switch anyone on — who gets captioned is still up to you.
+
+If a moderator drags the bot to a different channel, ChatterLayer follows the
+move and the Channels panel updates to match.
 
 ### Names and colours
 
@@ -298,8 +353,9 @@ OBS refresh needed:
 | **Max lines** | How many captions are visible at once (1–8) |
 | **Live partial text** | Words appear as they're spoken, then get corrected when the sentence settles. Turn it off if you only want finished lines. |
 | **Speaker names** | Show or hide the name in front of each caption |
-| **Port** | Change it if `8777` clashes with something — remember to update the OBS URL |
-| **Clear captions** | Wipes the overlay immediately. Handy panic button. |
+| **Port** | Change it if `8777` clashes with something. Applies when you press Enter or click away — remember to update the OBS URL |
+| **Clear captions** | Wipes the overlay immediately. |
+| **Send test caption** | Puts a sample line on the overlay, for sizing it in OBS without a call |
 
 ### Watch it before your viewers do
 
@@ -309,6 +365,36 @@ is producing gibberish, or that the model is mishearing a name badly.
 
 The **Log** panel underneath shows connection state and any errors. That's the
 first place to look if something's not working.
+
+---
+
+## Leaving it running
+
+ChatterLayer is built to sit in the tray for a whole stream and look after
+itself.
+
+**It recovers on its own.** If the speech engine crashes, it restarts, signs
+back in, rejoins the call and switches the same people back on — up to five
+tries, backing off from 1 second to a minute. If the voice connection drops, it
+rejoins (five tries) without unloading the model. The one exception: if a
+moderator disconnects the bot, it stays out. **Disconnect** and **Quit** always
+win over a retry in progress.
+
+**It tells you when it can't.** If captions stop while ChatterLayer isn't the
+window you're looking at, you get a system notification — and another saying
+"Captions are back" once it's recovered.
+
+**Start with the computer, in the tray** (under the cog) launches it at login,
+signed in to Discord and waiting. Nobody is captioned and nothing is shared
+until you press Connect. Windows and macOS only; Linux has no standard way to
+do this.
+
+**Global hotkeys** (also under the cog, off by default) work while a game has
+focus: **Ctrl+Alt+P** pauses and resumes captions, **Ctrl+Alt+K** clears the
+overlay. On a Mac it's Cmd instead of Ctrl. While they're on, those key
+combinations belong to ChatterLayer in every app.
+
+**Light or dark:** the cog also has **Match system**, **Light** and **Dark**.
 
 ---
 
@@ -536,6 +622,12 @@ loaded once and shared however many people are on.
 
 ## Troubleshooting
 
+Stuck? **Report a problem** in the app opens a GitHub bug report with your
+version, OS, build and the end of the Log already filled in — never your token.
+You read it before anything is sent.
+
+---
+
 **"Model: NOT FOUND"**
 Open the model picker (**Get models**) and download one.
 
@@ -548,7 +640,8 @@ The sign-in line under the dropdown says which it is.
   and ChatterLayer still has the old one. Paste the current token over the old
   one — it signs in again by itself.
 - *Signed in, but no servers* — the bot isn't in a server yet, or the only ones
-  it's in have no voice channels. Re-run the invite URL from step 3.
+  it's in have no voice channels. Press **Invite the bot to a server** in the
+  Source panel.
 
 ---
 

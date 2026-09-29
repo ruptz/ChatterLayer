@@ -1,5 +1,5 @@
 import { Section } from '@/components/Section';
-import { latency, pipeline } from '@/lib/content';
+import { latency, pipeline, sources } from '@/lib/content';
 
 const FILL = ['bg-s3', 'bg-s1', 'bg-s4'] as const;
 
@@ -29,6 +29,25 @@ export function HowItWorks() {
           </li>
         ))}
       </ol>
+
+      {/* The same three choices as the app's Source picker, in the same order. */}
+      <div className="mt-12 slab-sm">
+        <p className="label border-b-[3px] border-ink px-5 py-3">{sources.heading}</p>
+        <div className="grid lg:grid-cols-3">
+          {sources.options.map((option, index) => (
+            <div
+              key={option.id}
+              className={`px-5 py-5 ${
+                index > 0 ? 'border-t-[3px] border-ink lg:border-l-[3px] lg:border-t-0' : ''
+              }`}
+            >
+              <h3 className="h3">{option.name}</h3>
+              <p className="mt-3 text-[1.0625rem] leading-[1.55] text-ink-2">{option.body}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="note mt-4">{sources.note}</p>
 
       <div className="mt-12 slab-sm max-w-[40rem]">
         <p className="label border-b-[3px] border-ink px-5 py-3">Speech to pixels</p>

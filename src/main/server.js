@@ -9,6 +9,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { EventEmitter } = require('events');
 const { WebSocketServer } = require('ws');
 const { WEB_DIR } = require('../shared/paths');
 
@@ -91,8 +92,14 @@ function keyMatches(given, expected) {
   return crypto.timingSafeEqual(ha, hb);
 }
 
-class CaptionServer {
+/**
+ * Emits `clients` with `{ local, remote }` whenever an overlay connects or
+ * leaves. A local one is, in practice, OBS — which is how the app can say
+ * "OBS connected" without asking the user to check.
+ */
+class CaptionServer extends EventEmitter {
   constructor() {
+    super();
     this.server = null;
     this.wss = null;
     this.clients = new Set();
@@ -146,6 +153,16 @@ class CaptionServer {
     return n;
   }
 
+  clientCounts() {
+    const remote = this.remoteClients();
+    return { local: this.clients.size - remote, remote };
+  }
+
+  /** Drop a socket and say so, once — `close` and `error` can both fire. */
+  forget(ws) {
+    if (this.clients.delete(ws)) this.emit('clients', this.clientCounts());
+  }
+
   /**
    * Arm or disarm the access gate.
    *
@@ -178,7 +195,7 @@ class CaptionServer {
       } catch {
         /* ignore */
       }
-      this.clients.delete(ws);
+      this.forget(ws);
     }
   }
 
@@ -253,6 +270,7 @@ class CaptionServer {
 
       this.wss.on('connection', (ws) => {
         this.clients.add(ws);
+        this.emit('clients', this.clientCounts());
         // Send current styling so the overlay renders correctly straight away.
         // Deliberately NO caption backlog: OBS reloads the browser source on
         // scene changes, and replaying old speech would put words back on
@@ -263,8 +281,8 @@ class CaptionServer {
         // and nothing it sends can reach the engine, the config or the stream.
         // Anything that changes that turns a read-only link into a control
         // channel handed out to co-streamers — don't.
-        ws.on('close', () => this.clients.delete(ws));
-        ws.on('error', () => this.clients.delete(ws));
+        ws.on('close', () => this.forget(ws));
+        ws.on('error', () => this.forget(ws));
       });
 
       this.server.on('error', (err) => {
@@ -361,7 +379,10 @@ class CaptionServer {
         /* ignore */
       }
     }
-    this.clients.clear();
+    if (this.clients.size) {
+      this.clients.clear();
+      this.emit('clients', this.clientCounts());
+    }
     if (this.wss) this.wss.close();
     if (this.server) {
       await new Promise((r) => this.server.close(r));

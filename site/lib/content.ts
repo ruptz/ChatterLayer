@@ -24,11 +24,13 @@ export const site = {
 
   tagline: 'Live captions for your Discord call, straight into OBS.',
   description:
-    'ChatterLayer puts a bot in your Discord voice call, transcribes the people you choose on your own PC, and renders colour-coded captions into an OBS browser source. Free, offline, MIT licensed.',
+    'ChatterLayer puts a bot in your Discord voice call, transcribes the people you choose on your own PC, and renders colour-coded captions into an OBS browser source. It can caption your own mic too, with or without the call. Free, offline, MIT licensed.',
   author: 'ruptz',
 
   repoUrl: 'https://github.com/ruptz/Chatterlayer',
   releasesUrl: 'https://github.com/ruptz/Chatterlayer/releases',
+  /** Drafts and pre-releases never show up here, so the buttons can't hand out an unreviewed build. */
+  latestReleaseApi: 'https://api.github.com/repos/ruptz/Chatterlayer/releases/latest',
   issuesUrl: 'https://github.com/ruptz/Chatterlayer/issues',
   licenseUrl: 'https://github.com/ruptz/Chatterlayer/blob/master/LICENSE',
   kofiUrl: 'https://ko-fi.com/ruptz',
@@ -224,11 +226,142 @@ export const pipeline = [
   },
 ] as const;
 
+/**
+ * What feeds it. Both leads with the case it exists for: the streamer muted in
+ * Discord, talking to chat. That is the one thing neither source alone catches.
+ */
+export const sources = {
+  heading: 'Your call, your mic, or both',
+  options: [
+    {
+      id: 'discord',
+      name: 'Discord call',
+      body: 'Everyone in the voice channel you switch on, through the bot.',
+    },
+    {
+      id: 'mic',
+      name: 'My mic',
+      body: 'Just you, straight from your microphone. No bot, no Discord sign-in, nothing leaves your PC.',
+    },
+    {
+      id: 'both',
+      name: 'Both',
+      body: 'The call and your mic together. Mute in Discord or let go of push-to-talk to read chat out, and Discord hears nothing, so those words would go uncaptioned. Your mic still hears them.',
+    },
+  ],
+  note: 'In Both, press “This is me” on your own Discord row. Your mic captions you from then on, so you never appear twice.',
+} as const;
+
 /** Speech to pixels, from the app's own measurements. */
 export const latency = [
   { stage: 'Caption delay on the recommended models', value: '150–290 ms' },
   { stage: 'Word by word, on Vosk Medium', value: '250–500 ms' },
 ] as const;
+
+/* -------------------------------------------------------------------------- */
+/*  Downloads                                                                  */
+/*                                                                             */
+/*  The buttons hand over the file itself rather than the release page, which  */
+/*  means the release notes' warnings never get read. So the warnings travel   */
+/*  with the file: each build carries what happens after you open it.          */
+/* -------------------------------------------------------------------------- */
+
+export type Platform = 'windows' | 'mac' | 'linux';
+
+/** `{file}` in a command is swapped for the name of the file that was downloaded. */
+export type AfterStep = { text: string; code?: string };
+
+export type Download = {
+  key: string;
+  platform: Platform;
+  /** In the list of other builds. */
+  label: string;
+  /** On the button, when this is the build that suits the visitor. */
+  button: string;
+  /** Under the button, before the version and size. */
+  kind: string;
+  /** Matched against the release's asset names, which carry the version. */
+  match: RegExp;
+  after: AfterStep[];
+};
+
+const windowsAfter: AfterStep[] = [
+  { text: 'If your browser says the file isn’t commonly downloaded, choose Keep. It says that about anything new that isn’t signed.' },
+  { text: 'Run it. Windows SmartScreen puts up a blue box the first time: click More info, then Run anyway.' },
+  { text: 'That’s the whole cost of not paying for a code-signing certificate. After this it opens like anything else.' },
+];
+
+const macAfter: AfterStep[] = [
+  { text: 'Open the .dmg and drag ChatterLayer into Applications.' },
+  { text: 'The first time, right-click the app and choose Open, then Open again. It isn’t signed, so a double-click gets refused.' },
+  {
+    text: 'If macOS says the app is damaged, it isn’t. That’s the quarantine flag every unsigned download gets. ChatterLayer offers to clear it in one click, or you can do it yourself:',
+    code: 'xattr -dr com.apple.quarantine /Applications/ChatterLayer.app',
+  },
+];
+
+export const downloads: Download[] = [
+  {
+    key: 'win-setup',
+    platform: 'windows',
+    label: 'Windows installer',
+    button: 'Download for Windows',
+    kind: 'Installer',
+    match: /-Setup\.exe$/,
+    after: windowsAfter,
+  },
+  {
+    key: 'win-portable',
+    platform: 'windows',
+    label: 'Windows portable',
+    button: 'Download for Windows',
+    kind: 'Portable',
+    match: /-portable\.exe$/,
+    after: windowsAfter,
+  },
+  {
+    key: 'mac-arm',
+    platform: 'mac',
+    label: 'macOS, Apple Silicon',
+    button: 'Download for Mac',
+    kind: 'Apple Silicon',
+    match: /-arm64\.dmg$/,
+    after: macAfter,
+  },
+  {
+    key: 'mac-intel',
+    platform: 'mac',
+    label: 'macOS, Intel',
+    button: 'Download for Mac',
+    kind: 'Intel',
+    match: /^(?!.*-arm64).*\.dmg$/,
+    after: macAfter,
+  },
+  {
+    key: 'appimage',
+    platform: 'linux',
+    label: 'Linux AppImage',
+    button: 'Download for Linux',
+    kind: 'AppImage',
+    match: /\.AppImage$/,
+    after: [
+      { text: 'Make it executable. In most file managers that’s Properties, then Allow executing as program. Or:', code: 'chmod +x {file}' },
+      { text: 'Double-click it. There’s nothing to install.' },
+    ],
+  },
+  {
+    key: 'deb',
+    platform: 'linux',
+    label: 'Linux .deb',
+    button: 'Download for Linux',
+    kind: '.deb package',
+    match: /\.deb$/,
+    after: [
+      { text: 'Install it from the folder you saved it to:', code: 'sudo apt install ./{file}' },
+      { text: 'ChatterLayer shows up in your applications menu.' },
+    ],
+  },
+];
 
 /* -------------------------------------------------------------------------- */
 /*  Setup — the one genuinely sequential part of the page, hence the numbers   */
@@ -247,7 +380,7 @@ export const setupSteps: SetupStep[] = [
   {
     title: 'Install it',
     body: 'There’s a normal installer, and a portable build if you’d rather not install anything. The whole setup runs about ten minutes, and most of that is watching a download bar.',
-    link: { label: 'Downloads on GitHub', href: site.releasesUrl },
+    link: { label: 'Get the download', href: '#download' },
     note: 'None of the builds are code-signed, so Windows SmartScreen throws up a blue box the first time you run it: click More info, then Run anyway. On macOS the app offers to clear Gatekeeper’s quarantine flag in one click, so you never have to open Terminal.',
   },
   {
@@ -262,14 +395,13 @@ export const setupSteps: SetupStep[] = [
       'New Application, name it whatever you like, then the Bot tab and Add Bot.',
       'Reset Token, then Copy. Treat it like a password.',
       'Leave every Privileged Gateway Intent switched off. ChatterLayer doesn’t need them.',
-      'OAuth2, then URL Generator: scope bot, permissions View Channel and Connect. It never talks, so it doesn’t need Speak.',
-      'Open the URL it builds and invite the bot to your server.',
     ],
     link: { label: 'Discord Developer Portal', href: site.discordDevPortalUrl },
+    note: 'Only captioning your own mic? Skip this step and the next: pick My mic under Source and go straight to OBS.',
   },
   {
     title: 'Paste the token, pick a channel',
-    body: 'Drop the bot token into the Source panel. It signs in on its own, and the Server and Voice channel dropdowns fill up with everywhere your bot can reach. Choose one and hit Connect. There’s no channel ID to copy and no Developer Mode to turn on, and channels your bot can’t join are greyed out with the missing permission named.',
+    body: 'Drop the bot token into the Source panel and it signs in on its own. Press Invite the bot to a server, pick your server in the browser tab that opens, and it shows up in the Server dropdown by itself. Choose a voice channel and hit Connect. There’s no channel ID to copy and no Developer Mode to turn on, and channels your bot can’t join are greyed out with the missing permission named.',
     note: 'The token goes into your operating system’s own keystore, DPAPI on Windows, Keychain on macOS, libsecret on Linux, so you paste it once and never think about it again.',
   },
   {
@@ -580,5 +712,5 @@ export const requirements = [
     label: 'RAM',
     value: '~2.6 GB on Parakeet, or ~570 MB for a seven-person call on Moonshine Base',
   },
-  { label: 'Also', value: 'A free Discord bot, and any recent OBS' },
+  { label: 'Also', value: 'Any recent OBS, plus a free Discord bot to caption a call (not needed for your mic alone)' },
 ] as const;

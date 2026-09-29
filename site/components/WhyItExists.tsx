@@ -13,7 +13,7 @@ import { why } from '@/lib/content';
 export function WhyItExists() {
   return (
     <Section index="02" id="why" name="Why it exists" lede={why.heading}>
-      <div className="max-w-[38rem] space-y-6 text-[1.125rem] leading-[1.6] text-ink-2">
+      <div className="max-w-152 space-y-6 text-[1.125rem] leading-[1.6] text-ink-2">
         {why.body.map((paragraph) => (
           <p key={paragraph.slice(0, 32)}>{paragraph}</p>
         ))}

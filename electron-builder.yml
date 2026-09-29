@@ -75,7 +75,16 @@ win:
       arch: [x64]
   icon: build/icon.png
   artifactName: ${productName}-${version}-Setup.${ext}
+  # A platform's own files list replaces the top-level one rather than adding
+  # to it, and a list of nothing but exclusions means 'everything else'. That
+  # packed models/, site/ and old dist/ builds into a 4 GB installer, so every
+  # platform repeats the includes.
   files:
+    - src/**/*
+    - web/**/*
+    - package.json
+    - build/icon.png
+    - build/icon.svg
     - '!node_modules/onnxruntime-node/bin/napi-v6/{darwin,linux}/**'
     - '!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**'
 
@@ -102,7 +111,15 @@ mac:
       arch: [x64, arm64]
   icon: build/icon.png
   category: public.app-category.utilities
+  # Without a usage string macOS refuses the mic outright, with no prompt.
+  extendInfo:
+    NSMicrophoneUsageDescription: ChatterLayer captions your microphone when you switch the mic on. Audio never leaves this computer.
   files:
+    - src/**/*
+    - web/**/*
+    - package.json
+    - build/icon.png
+    - build/icon.svg
     - '!node_modules/onnxruntime-node/bin/napi-v6/{win32,linux}/**'
 
 linux:
@@ -115,6 +132,11 @@ linux:
   category: AudioVideo
   maintainer: ruptz
   files:
+    - src/**/*
+    - web/**/*
+    - package.json
+    - build/icon.png
+    - build/icon.svg
     - '!node_modules/onnxruntime-node/bin/napi-v6/{win32,darwin}/**'
     - '!node_modules/onnxruntime-node/bin/napi-v6/linux/arm64/**'
 

@@ -9,6 +9,7 @@
  */
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const {
   app,
@@ -20,6 +21,11 @@ const {
   Tray,
   Menu,
   nativeImage,
+  nativeTheme,
+  Notification,
+  globalShortcut,
+  session,
+  systemPreferences,
 } = require('electron');
 
 const { ConfigStore } = require('./config');
@@ -41,9 +47,13 @@ const {
   sweepPartials,
   recommendedModelFor,
   machineSpecs,
+  MODEL_CATALOG,
 } = require('../shared/models');
 const { buildFilter, maskText } = require('../shared/wordfilter');
 const { checkForUpdate, RELEASES_PAGE } = require('./updates');
+const { osOption, buildOption, scrubLog, reportUrl } = require('./report');
+const { isSafeExternalUrl } = require('./links');
+const { whatsNewFor } = require('./whats-new');
 
 let mainWindow = null;
 let config = null;
@@ -81,7 +91,13 @@ function captionName(userId, fallback) {
  * simply lost. `getState` serves this on init, so the pickers populate whether
  * the events arrived early, late, or not at all.
  */
-let discord = { auth: 'idle', botTag: null, message: '', guilds: [] };
+let discord = { auth: 'idle', botTag: null, botId: null, message: '', guilds: [] };
+
+/** Overlays connected right now; `local` is in practice OBS. */
+let overlays = { local: 0, remote: 0 };
+
+/** Decided once at launch; null when there's nothing to announce. */
+let whatsNew = null;
 
 /** Compiled slur matcher, rebuilt whenever the filter settings change. */
 let wordFilter = buildFilter({ enabled: true, custom: [] });
@@ -142,6 +158,13 @@ let allowQuit = false;
 /** Mirrors the tally lamp in the window, minus the detail no tooltip can hold. */
 let trayStatus = { state: 'standby', speakers: 0 };
 
+/**
+ * Pause: still in the call, still transcribing, but nothing goes out — not to
+ * the overlay, not to the monitor. The privacy panic button. Never saved, so
+ * a fresh launch is never silently paused.
+ */
+let paused = false;
+
 /** Told once, the first time the window vanishes into the tray. */
 let toldAboutTray = false;
 
@@ -165,6 +188,7 @@ function showWindow() {
 /** The lamp, in words: what the tooltip and the menu's first line say. */
 function statusLabel() {
   const { state, speakers } = trayStatus;
+  if (state === 'onair' && paused) return 'Paused — nothing is going out';
   if (state === 'onair') {
     return speakers ? `On air — ${speakers} on` : 'On air — nobody switched on';
   }
@@ -183,6 +207,11 @@ function renderTray() {
       { label: statusLabel(), enabled: false },
       { type: 'separator' },
       { label: 'Show ChatterLayer', click: showWindow },
+      {
+        label: paused ? 'Resume captions' : 'Pause captions',
+        enabled: running,
+        click: () => setPaused(!paused),
+      },
       {
         label: 'Disconnect',
         enabled: running,
@@ -221,7 +250,141 @@ function createTray() {
   renderTray();
 }
 
-function createWindow() {
+function setPaused(on) {
+  paused = Boolean(on);
+  // A panic button that left the last sentence on screen would not be one.
+  if (paused) clearCaptions();
+  send('chatterlayer:event', { type: 'paused', paused });
+  renderTray();
+}
+
+/** Wipe the overlay and the monitor together — they show the same thing. */
+function clearCaptions() {
+  server.clearCaptions();
+  send('chatterlayer:event', { type: 'cleared' });
+}
+
+// ---------------------------------------------------------------- hotkeys ---
+
+/**
+ * System-wide, because the moment you need them the game has focus. Off by
+ * default: a global shortcut quietly steals that key from every other app.
+ */
+const HOTKEYS = {
+  pause: 'CommandOrControl+Alt+P',
+  clear: 'CommandOrControl+Alt+K',
+};
+
+/** "Ctrl+Alt+P" on Windows and Linux, "Cmd+Alt+P" on a Mac. */
+const hotkeyLabel = (accel) =>
+  accel.replace('CommandOrControl', process.platform === 'darwin' ? 'Cmd' : 'Ctrl');
+
+function applyHotkeys() {
+  globalShortcut.unregisterAll();
+  if (!config.data.hotkeys.enabled) return;
+
+  const taken = [];
+  const bind = (accel, fn) => {
+    if (!globalShortcut.register(accel, fn)) taken.push(hotkeyLabel(accel));
+  };
+  bind(HOTKEYS.pause, () => setPaused(!paused));
+  bind(HOTKEYS.clear, clearCaptions);
+  if (taken.length) {
+    send('chatterlayer:event', {
+      type: 'log',
+      level: 'warn',
+      message: `${taken.join(' and ')} ${taken.length === 1 ? 'is' : 'are'} already taken by another app, so ${taken.length === 1 ? 'it does' : 'they do'} nothing here.`,
+    });
+  }
+}
+
+// --------------------------------------------------------------- startup ---
+
+/**
+ * Start with the computer, straight into the tray. Only the Discord sign-in
+ * happens on its own, as on any launch; the tunnel stays down and nobody is
+ * captioned until someone presses Connect.
+ *
+ * Electron has no login items on Linux, so the setting is hidden there.
+ */
+function applyLoginItem() {
+  if (process.platform === 'linux') return;
+  const opts = {
+    openAtLogin: Boolean(config.data.startup.atLogin),
+    args: app.isPackaged ? ['--hidden'] : [app.getAppPath(), '--hidden'],
+  };
+  // The portable exe unpacks itself to a new temp folder every run; the login
+  // item has to point at the file the user actually keeps.
+  if (process.env.PORTABLE_EXECUTABLE_FILE) opts.path = process.env.PORTABLE_EXECUTABLE_FILE;
+  app.setLoginItemSettings(opts);
+}
+
+function launchedHidden() {
+  if (process.argv.includes('--hidden')) return true;
+  return process.platform === 'darwin' && app.getLoginItemSettings().wasOpenedAtLogin;
+}
+
+// ---------------------------------------------------------- notifications ---
+
+/** Captions have been going out, so them stopping is news. */
+let captionsLive = false;
+/** A stop was announced, so the recovery is worth announcing too. */
+let toldStopped = false;
+
+/** Not looking at the window — which, mid-stream, is nearly always. */
+function away() {
+  return (
+    !mainWindow ||
+    mainWindow.isDestroyed() ||
+    !mainWindow.isVisible() ||
+    mainWindow.isMinimized() ||
+    !mainWindow.isFocused()
+  );
+}
+
+function notify(title, body) {
+  if (!Notification.isSupported()) return;
+  const note = new Notification({ title, body });
+  note.on('click', showWindow);
+  note.show();
+}
+
+/** Say so when captions stop on their own and nobody is watching the app. */
+function noticeStatus(msg) {
+  if (msg.state === 'joined') {
+    if (toldStopped && away()) notify('Captions are back', msg.message);
+    toldStopped = false;
+    captionsLive = true;
+  } else if (msg.state === 'stopped') {
+    // The user's own Disconnect.
+    captionsLive = false;
+    toldStopped = false;
+  } else if ((msg.state === 'error' || msg.state === 'disconnected') && captionsLive) {
+    captionsLive = false;
+    if (away()) {
+      notify('Captions stopped', msg.message);
+      toldStopped = true;
+    }
+  }
+}
+
+const THEMES = new Set(['system', 'light', 'dark']);
+
+/** Matches --ground in styles.css, so the window never flashes the other one. */
+const themeBackground = () => (nativeTheme.shouldUseDarkColors ? '#0e0e0e' : '#ffffff');
+
+/**
+ * The stylesheet reads prefers-color-scheme, and themeSource is what Chromium
+ * answers that with — so one assignment switches the whole window, live, and
+ * "Match system" keeps following Windows after that.
+ */
+function applyTheme() {
+  const theme = config && config.data.appearance.theme;
+  nativeTheme.themeSource = THEMES.has(theme) ? theme : 'system';
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setBackgroundColor(themeBackground());
+}
+
+function createWindow({ show = true } = {}) {
   mainWindow = new BrowserWindow({
     width: 1120,
     height: 840,
@@ -232,19 +395,21 @@ function createWindow() {
     // title bar. An installed build shows the same picture either way: the icon
     // electron-builder embeds in the exe is made from this same file.
     icon: ICON_PATH,
-    backgroundColor: '#191b1a', // matches --chassis so launch doesn't flash
+    backgroundColor: themeBackground(),
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
 
   mainWindow.setMenuBarVisibility(false);
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.once('ready-to-show', () => {
+    if (show) mainWindow.show();
+  });
 
   mainWindow.on('close', (event) => {
     // Every real exit path sets allowQuit first; anything else is the user
@@ -335,34 +500,52 @@ function wireTunnel() {
   });
 }
 
+/**
+ * Everything that goes on stream is resolved here: colour, display name, and
+ * slur masking. Filtering at this single point means unmasked text never
+ * reaches the overlay or the monitor — test captions included.
+ */
+function deliverCaption(msg) {
+  if (paused) return;
+  const body = maskText(msg.text, wordFilter);
+  // A slur can just as easily be in someone's Discord name.
+  const name = maskText(captionName(msg.userId, msg.username), wordFilter);
+
+  const caption = {
+    userId: msg.userId,
+    username: name.text,
+    text: body.text,
+    color: captionColor(msg.userId),
+    isFinal: msg.isFinal,
+    timestamp: msg.timestamp,
+  };
+  server.sendCaption(caption);
+  send('chatterlayer:caption', caption);
+
+  if (msg.isFinal && body.masked + name.masked > 0) {
+    maskedTotal += body.masked + name.masked;
+    send('chatterlayer:event', { type: 'filter', masked: maskedTotal });
+  }
+}
+
+/**
+ * Lines for "Send test caption", taken in turn. Different lengths on purpose:
+ * pressing it a few times shows wrapping and Max lines, which is what someone
+ * sizing the source in OBS needs to see.
+ */
+const TEST_LINES = [
+  'This is a test caption from ChatterLayer.',
+  'Captions wrap like this when somebody keeps talking for a while without stopping for breath.',
+  'Size and place the browser source in OBS until this looks right.',
+];
+let testLine = 0;
+
 function wireEngine() {
   engine.on('message', (msg) => {
     switch (msg.type) {
-      case 'caption': {
-        // Everything that goes on stream is resolved here: colour, display
-        // name, and slur masking. Filtering at this single point means
-        // unmasked text never reaches the overlay or the monitor.
-        const body = maskText(msg.text, wordFilter);
-        // A slur can just as easily be in someone's Discord name.
-        const name = maskText(captionName(msg.userId, msg.username), wordFilter);
-
-        const caption = {
-          userId: msg.userId,
-          username: name.text,
-          text: body.text,
-          color: captionColor(msg.userId),
-          isFinal: msg.isFinal,
-          timestamp: msg.timestamp,
-        };
-        server.sendCaption(caption);
-        send('chatterlayer:caption', caption);
-
-        if (msg.isFinal && body.masked + name.masked > 0) {
-          maskedTotal += body.masked + name.masked;
-          send('chatterlayer:event', { type: 'filter', masked: maskedTotal });
-        }
+      case 'caption':
+        deliverCaption(msg);
         return;
-      }
       case 'captionCleared':
         server.broadcast({ type: 'captionCleared', userId: msg.userId });
         // The monitor mirrors the overlay, so it has to hear this too —
@@ -394,6 +577,7 @@ function wireEngine() {
           auth: msg.state,
           message: msg.message || '',
           botTag: gone ? null : msg.botTag || discord.botTag,
+          botId: gone ? null : msg.botId || discord.botId,
           // Nothing to pick from once the session is gone.
           guilds: gone ? [] : discord.guilds,
         };
@@ -401,7 +585,12 @@ function wireEngine() {
         return;
       }
       case 'guilds':
-        discord = { ...discord, guilds: msg.guilds, botTag: msg.botTag || discord.botTag };
+        discord = {
+          ...discord,
+          guilds: msg.guilds,
+          botTag: msg.botTag || discord.botTag,
+          botId: msg.botId || discord.botId,
+        };
         send('chatterlayer:event', msg);
         return;
       case 'status': {
@@ -412,6 +601,7 @@ function wireEngine() {
         else if (msg.state === 'stopped' || msg.state === 'disconnected') {
           trayStatus = { state: 'standby', speakers: 0 };
         } else trayStatus.state = 'linking';
+        noticeStatus(msg);
         renderTray();
         send('chatterlayer:event', msg);
         return;
@@ -423,8 +613,23 @@ function wireEngine() {
 }
 
 async function bootstrap() {
-  config = new ConfigStore();
   rebuildFilter();
+
+  // Recorded as seen straight away, so it is once per update whether or not
+  // anyone presses "Got it".
+  whatsNew = whatsNewFor({
+    current: app.getVersion(),
+    lastSeen: config.data.lastSeenVersion,
+    upgraded: config.existed,
+  });
+  // Coming from a version before the setup checklist existed means they got
+  // set up without it; it's for first runs, not a tour for people already live.
+  if (config.existed && !config.data.lastSeenVersion && !config.data.setupDone) {
+    config.update({ setupDone: true });
+  }
+  if (config.data.lastSeenVersion !== app.getVersion()) {
+    config.update({ lastSeenVersion: app.getVersion() });
+  }
 
   // Reclaim space from any model download killed mid-flight last run. The next
   // attempt re-fetches whole files, so a leftover .part is only wasted disk.
@@ -449,6 +654,11 @@ async function bootstrap() {
   tunnel = new Tunnel(path.join(app.getPath('userData'), 'bin'));
 
   server.updateSettings(displaySettings());
+  applyHotkeys();
+  server.on('clients', (counts) => {
+    overlays = counts;
+    send('chatterlayer:event', { type: 'overlays', ...counts });
+  });
   wireEngine();
   wireTunnel();
 
@@ -469,7 +679,21 @@ async function bootstrap() {
   // speech model is loaded and no voice channel is joined until Connect.
   // Side effect worth knowing: the bot shows as online in Discord for as long
   // as ChatterLayer is open, not just while captioning.
-  if (config.getToken()) engine.signIn(config.getToken());
+  //
+  // Not when only the mic is captioned: then nothing needs Discord, and the
+  // app should make no connection to it at all.
+  if (config.getToken() && config.data.source !== 'mic') engine.signIn(config.getToken());
+}
+
+/**
+ * The window may ask for the microphone and nothing else — no camera, no
+ * screen, no location. Electron's default grants every request.
+ */
+function limitPermissions() {
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) => {
+    const types = (details && details.mediaTypes) || [];
+    callback(permission === 'media' && types.length > 0 && types.every((t) => t === 'audio'));
+  });
 }
 
 // ------------------------------------------------------------------- IPC ---
@@ -484,9 +708,78 @@ ipcMain.handle('chatterlayer:getState', () => ({
   running: engine.running,
   discord,
   share: shareState(),
+  overlays,
+  whatsNew,
+  paused,
+  platform: process.platform,
+  hotkeys: { pause: hotkeyLabel(HOTKEYS.pause), clear: hotkeyLabel(HOTKEYS.clear) },
   version: app.getVersion(),
   releasesUrl: RELEASES_PAGE,
 }));
+
+ipcMain.handle('chatterlayer:setPaused', (_e, on) => {
+  setPaused(on);
+  return paused;
+});
+
+/**
+ * Follow mode: whose channel moves the bot follows, or nobody. One person,
+ * saved, so it holds across reconnects.
+ */
+ipcMain.handle('chatterlayer:setFollow', (_e, userId) => {
+  config.update({ follow: { userId: userId || '' } });
+  engine.setFollow(userId || null);
+  return config.toClient();
+});
+
+/** "This is me": which Discord member is the streamer. Saved, like Follow. */
+ipcMain.handle('chatterlayer:setMe', (_e, userId) => {
+  config.update({ me: { userId: userId || '' } });
+  engine.setMe(userId || null);
+  return config.toClient();
+});
+
+ipcMain.handle('chatterlayer:dismissWhatsNew', () => {
+  whatsNew = null;
+  return true;
+});
+
+/**
+ * A line on the overlay through exactly the path speech takes, so OBS can be
+ * sized and positioned without anyone being in a call.
+ */
+ipcMain.handle('chatterlayer:testCaption', () => {
+  const text = TEST_LINES[testLine++ % TEST_LINES.length];
+  deliverCaption({
+    userId: 'chatterlayer-test',
+    username: 'Test',
+    text,
+    isFinal: true,
+    timestamp: Date.now(),
+  });
+  return { ...overlays, paused };
+});
+
+/**
+ * Open a pre-filled bug report in the browser. The renderer hands over the Log
+ * panel as it reads; the token, the share key and anything shaped like a token
+ * are stripped here, where the real secrets are known.
+ */
+ipcMain.handle('chatterlayer:reportProblem', (_e, { log } = {}) => {
+  const modelDir = path.basename(tryResolveModelPath(config.data.modelPath) || '');
+  const entry = MODEL_CATALOG.find((m) => m.dir === modelDir);
+  // A custom model has no option on the form, so that field is left for them.
+  const model = !listModels().length ? 'No model downloaded yet' : entry ? entry.label : '';
+
+  const url = reportUrl({
+    version: app.getVersion(),
+    os: osOption({ platform: process.platform, release: os.release(), arch: process.arch }),
+    build: buildOption({ platform: process.platform, packaged: app.isPackaged, env: process.env }),
+    model,
+    log: scrubLog(log, [config.getToken(), shareKey]),
+  });
+  return shell.openExternal(url);
+});
 
 /**
  * Arm or disarm the sharing panel. Switching it on deliberately does NOT open
@@ -598,6 +891,10 @@ ipcMain.handle('chatterlayer:updateConfig', async (_e, patch) => {
   }
 
   if (patch.filter !== undefined) rebuildFilter();
+  if (patch.mic !== undefined) engine.setMicGate(micGate());
+  if (patch.appearance !== undefined) applyTheme();
+  if (patch.hotkeys !== undefined) applyHotkeys();
+  if (patch.startup !== undefined) applyLoginItem();
 
   // Changing host/port needs the server rebound.
   if (JSON.stringify(config.data.server) !== before) {
@@ -689,23 +986,57 @@ ipcMain.handle('chatterlayer:start', async (_e, { token, channelId, guildId }) =
   if (channelId !== undefined) config.update({ channelId });
   if (guildId !== undefined) config.update({ guildId });
 
+  const source = config.data.source;
   const activeToken = config.getToken();
-  if (!activeToken) throw new Error('Enter your Discord bot token first.');
-  if (!config.data.channelId) throw new Error('Pick a voice channel first.');
+  if (source !== 'mic') {
+    if (!activeToken) throw new Error('Enter your Discord bot token first.');
+    if (!config.data.channelId) throw new Error('Pick a voice channel first.');
+  }
 
+  // Before start, so the mic's gate is tuned from its first chunk and the
+  // streamer's Discord audio is never captured beside their mic.
+  engine.setMicGate(micGate());
+  engine.setMe(config.data.me.userId || null);
   await engine.start({
-    token: activeToken,
+    source,
+    token: source === 'mic' ? undefined : activeToken,
     channelId: config.data.channelId,
     modelPath: config.data.modelPath || undefined,
   });
   // Restore the previous selection once the engine reports it has joined.
   engine.setSelected(config.data.selected || []);
+  engine.setFollow(config.data.follow.userId || null);
   return true;
 });
 
 ipcMain.handle('chatterlayer:stop', async () => {
   await engine.stop();
   return true;
+});
+
+const micGate = () => ({
+  sensitivity: config.data.mic.sensitivity,
+  hangMs: config.data.mic.hangMs,
+});
+
+/**
+ * macOS asks the user once, per app, before any page can open the mic; without
+ * this getUserMedia just fails silently there. Windows and Linux answer at the
+ * OS level and need nothing here.
+ */
+ipcMain.handle('chatterlayer:micAccess', async () => {
+  if (process.platform !== 'darwin') return true;
+  return systemPreferences.askForMediaAccess('microphone');
+});
+
+/**
+ * Mic audio from the window, on to the engine. Base64 because the engine's IPC
+ * channel is JSON, where a Buffer turns into an array of numbers several times
+ * its size.
+ */
+ipcMain.on('chatterlayer:micAudio', (_e, pcm) => {
+  if (!(pcm instanceof Uint8Array) || !pcm.byteLength) return;
+  engine.micAudio(Buffer.from(pcm.buffer, pcm.byteOffset, pcm.byteLength).toString('base64'));
 });
 
 ipcMain.handle('chatterlayer:setSelected', (_e, userIds) => {
@@ -715,7 +1046,7 @@ ipcMain.handle('chatterlayer:setSelected', (_e, userIds) => {
 });
 
 ipcMain.handle('chatterlayer:clearCaptions', () => {
-  server.clearCaptions();
+  clearCaptions();
   return true;
 });
 
@@ -724,7 +1055,10 @@ ipcMain.handle('chatterlayer:copy', (_e, text) => {
   return true;
 });
 
-ipcMain.handle('chatterlayer:openExternal', (_e, url) => shell.openExternal(url));
+ipcMain.handle('chatterlayer:openExternal', (_e, url) => {
+  if (!isSafeExternalUrl(url)) return false;
+  return shell.openExternal(url);
+});
 ipcMain.handle('chatterlayer:revealConfig', () => shell.showItemInFolder(config.file));
 
 // ----------------------------------------------------------- app lifecycle --
@@ -741,7 +1075,19 @@ if (!app.requestSingleInstanceLock()) {
     // else, since accepting relaunches the app.
     await maybeClearQuarantine({ app, dialog, clipboard });
     resolveRuntimeDirs();
-    createWindow();
+    // Before the window, so its first paint is already in the right theme.
+    config = new ConfigStore();
+    limitPermissions();
+    applyTheme();
+    // Under "Match system" Windows can flip underneath us; keep the window's
+    // own backdrop (seen while resizing) in step with the page.
+    nativeTheme.on('updated', () => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setBackgroundColor(themeBackground());
+    });
+    // Windows attributes notifications to this id; it must match the
+    // installer's appId or they arrive labelled as someone else.
+    if (process.platform === 'win32') app.setAppUserModelId('com.ruptz.chatterlayer');
+    createWindow({ show: !launchedHidden() });
     createTray();
     await bootstrap();
 
@@ -752,6 +1098,8 @@ if (!app.requestSingleInstanceLock()) {
 // With close-to-tray on, the close is prevented and the window is never
 // destroyed, so this only runs on a genuine quit. With it off, the window
 // closing is the app closing, which is the behaviour restored here.
+app.on('will-quit', () => globalShortcut.unregisterAll());
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
@@ -772,7 +1120,9 @@ app.on('before-quit', async (event) => {
   // The tunnel first: it is the only part of this that is visible from outside
   // the machine, and it must not outlive the window under any exit path.
   if (tunnel) await tunnel.stop();
-  if (engine && engine.child) await engine.shutdown();
+  // Also when there's no child: a crash restart may be pending, and quitting
+  // must cancel it rather than race it.
+  if (engine) await engine.shutdown();
   if (server) await server.stop();
   app.exit(0);
 });

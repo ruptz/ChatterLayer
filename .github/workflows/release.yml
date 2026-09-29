@@ -70,7 +70,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -120,12 +120,12 @@ jobs:
       # workflow. Free and GitHub-native; `gh attestation verify <file>` checks
       # it. Does not need a signing certificate.
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: ${{ matrix.attest }}
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: chatterlayer-${{ matrix.name }}
           path: ${{ matrix.artifacts }}
@@ -158,7 +158,7 @@ jobs:
           echo "Publishing $TAG"
 
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
@@ -191,8 +191,23 @@ jobs:
             --bundle SHA256SUMS.cosign.bundle \
             SHA256SUMS
 
+      # The in-app "What's new" card is the one place release notes are
+      # written. A version with no entry gets no section, not an empty one.
+      - name: Read this version's notes from whats-new.js
+        id: notes
+        run: |
+          {
+            echo 'md<<NOTES_EOF'
+            node -e '
+              const { NOTES } = require("./src/main/whats-new");
+              const entry = NOTES.find((n) => n.version === process.argv[1].replace(/^v/, ""));
+              if (entry) console.log(["### What’s new", "", ...entry.items.map((i) => `- ${i}`), ""].join("\n"));
+            ' "${{ steps.tag.outputs.name }}"
+            echo 'NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           # Passed explicitly. Left to the action's default it reads github.ref,
           # which is a branch ref on a manual run and fails with
@@ -209,6 +224,8 @@ jobs:
             Live, colour-coded Discord voice captions for OBS. Free and fully
             offline — speech recognition runs on your own machine. No API keys,
             no accounts, no per-minute billing.
+
+            ${{ steps.notes.outputs.md }}
 
             ### Download
 
@@ -228,8 +245,9 @@ jobs:
             **Moonshine Base** (251 MB) on lighter machines. Models are stored
             in your user data folder and survive updates.
 
-            You'll also need a Discord bot token — about two minutes to set up,
-            no privileged intents required. See the README.
+            To caption a Discord call you'll also need a bot token — about two
+            minutes to set up, no privileged intents required. See the README.
+            Captioning only your own mic needs no bot at all.
 
             ### About the "unknown developer" warnings
 
