@@ -21,6 +21,10 @@ updates:
       # A new compiler major buys users nothing; move when there's a reason to.
       - dependency-name: typescript
         update-types: ['version-update:semver-major']
+      # 1.24 dropped the Intel Mac binaries, and the Intel .dmg still ships.
+      # Moving past this means deciding what Intel Macs get instead.
+      - dependency-name: onnxruntime-node
+        versions: ['>=1.24.0']
 
   - package-ecosystem: github-actions
     directory: /
