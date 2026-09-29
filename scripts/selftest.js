@@ -2248,6 +2248,7 @@ function engineInCall() {
   const engine = new ChatterLayerEngine((m) => sent.push(m));
   engine.rejoinDelays = [5, 5];
   engine.resumeGraceMs = 20;
+  engine.rejoinTimeoutMs = 50;
   const guild = { id: 'g1', name: 'Night Shift' };
   engine.client = { user: { id: 'bot', tag: 'Bot#1' }, users: { cache: new Map() } };
   engine.channel = fakeChannel({ name: 'stream', guild, members: new Map() });
@@ -2308,6 +2309,79 @@ test('the call follows the bot when a moderator moves it', () => {
   const joined = sent.filter((m) => m.type === 'status' && m.state === 'joined');
   assert.strictEqual(joined.at(-1).channelId, 'c-lobby');
   assert.ok(sent.some((m) => m.type === 'members'));
+});
+
+testAsync('after a move, streams are rebuilt once the new voice session is up — for the last move only', async () => {
+  const { engine, connection, guild } = engineInCall();
+  let rebuilds = 0;
+  engine.rebuildStreams = () => rebuilds++;
+  const a = fakeChannel({ name: 'serenity', guild, members: new Map() });
+  const b = fakeChannel({ name: 'yap', guild, members: new Map() });
+  engine.onVoiceStateUpdate({ id: 'bot', channelId: 'c-stream' }, { id: 'bot', channelId: a.id, channel: a });
+  engine.onVoiceStateUpdate({ id: 'bot', channelId: a.id }, { id: 'bot', channelId: b.id, channel: b });
+  assert.strictEqual(rebuilds, 0, 'nothing to resubscribe to until the session is up');
+  connection.state = { status: 'ready' };
+  connection.emit('ready');
+  await wait(10);
+  assert.strictEqual(rebuilds, 1);
+});
+
+test('rebuilding streams leaves the mic running', () => {
+  const { engine } = engineInCall();
+  const torn = [];
+  const built = [];
+  engine.streams = new Map([['mic', {}], ['u1', {}]]);
+  engine.selected = new Set(['mic', 'u1']);
+  engine.teardownStream = (id) => torn.push(id);
+  engine.setupStream = (id) => built.push(id);
+  engine.rebuildStreams();
+  assert.deepStrictEqual(torn, ['u1']);
+  assert.deepStrictEqual(built, ['u1']);
+});
+
+test('follow and drop recovery join at once, past the rejoin hold', () => {
+  const { engine, connection, guild } = engineInCall();
+  const seen = [];
+  connection.rejoin = () => seen.push(engine.joining);
+  engine.followUserId = 'u1';
+  const there = fakeChannel({ name: 'serenity', guild });
+  engine.onVoiceStateUpdate(
+    { id: 'u1', channelId: 'c-stream' },
+    { id: 'u1', channelId: there.id, channel: there, guild, member: { displayName: 'Mika' } }
+  );
+  assert.deepStrictEqual(seen, [1], 'the engine marks its own joins');
+  assert.strictEqual(engine.joining, 0);
+});
+
+const { holdLibraryRejoins } = require('../src/engine/voice-adapter');
+
+testAsync('a rejoin the voice library starts on its own waits, then goes where the bot now is', async () => {
+  const sent = [];
+  let own = false;
+  let current = 'c-old';
+  const create = holdLibraryRejoins(() => ({ sendPayload: (p) => sent.push(p), destroy() {} }), {
+    isOwnJoin: () => own,
+    currentChannelId: () => current,
+    holdMs: 20,
+  });
+  const adapter = create({});
+  const join = (channel_id) => ({ op: 4, d: { guild_id: 'g1', channel_id, self_mute: true, self_deaf: false } });
+
+  // The library's reflex after the old socket closes, before the move is known.
+  assert.strictEqual(adapter.sendPayload(join('c-old')), true);
+  assert.strictEqual(sent.length, 0, 'held back');
+  current = 'c-new'; // the gateway's word on the move arrives
+  await wait(40);
+  assert.deepStrictEqual(sent.map((p) => p.d.channel_id), ['c-new'], 'sent to the new channel, not back');
+
+  // The engine's own joins, and leaving, are never held — and they cancel a held one.
+  own = true;
+  adapter.sendPayload(join('c-follow'));
+  own = false;
+  adapter.sendPayload(join('c-stale'));
+  adapter.sendPayload({ op: 4, d: { guild_id: 'g1', channel_id: null } });
+  await wait(40);
+  assert.deepStrictEqual(sent.map((p) => p.d.channel_id), ['c-new', 'c-follow', null]);
 });
 
 test('follow mode takes the bot where the followed person goes, and nowhere else', () => {

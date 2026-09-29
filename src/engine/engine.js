@@ -33,6 +33,7 @@ const prism = require('prism-media');
 
 const { Resampler48kStereoTo16kMono } = require('./resample');
 const { MicGate } = require('./mic-gate');
+const { holdLibraryRejoins } = require('./voice-adapter');
 const { resolveModel } = require('../shared/paths');
 
 /** Discord always sends 48 kHz stereo Opus; 960 samples = 20 ms per frame. */
@@ -136,6 +137,10 @@ class ChatterLayerEngine {
     this.warnedSpeakerLimit = false;
     /** Follow mode: the one person whose channel moves the bot follows. */
     this.followUserId = null;
+    /** Non-zero while the engine itself is joining, so the rejoin hold lets it through. */
+    this.joining = 0;
+    /** Counts moves, so only the latest one rebuilds the audio streams. */
+    this.moves = 0;
     /** Set when someone in the server disconnects the bot from voice. */
     this.botRemoved = false;
     /** A drop is being recovered, so a second Disconnected doesn't start another. */
@@ -660,10 +665,13 @@ class ChatterLayerEngine {
     }
     this.channel = channel;
 
-    this.connection = joinVoiceChannel({
+    this.connection = this.ownJoin(() => joinVoiceChannel({
       channelId: channel.id,
       guildId: channel.guild.id,
-      adapterCreator: channel.guild.voiceAdapterCreator,
+      adapterCreator: holdLibraryRejoins(channel.guild.voiceAdapterCreator, {
+        isOwnJoin: () => this.joining > 0,
+        currentChannelId: () => this.connection?.joinConfig?.channelId,
+      }),
       selfDeaf: false, // a deafened bot receives no audio at all
       selfMute: true,
 
@@ -677,7 +685,7 @@ class ChatterLayerEngine {
       // and destroys the audio stream. A speaker we can't decrypt should lose
       // captions, not take the stream down.
       decryptionFailureTolerance: 5000,
-    });
+    }));
 
     this.connection.on('error', (err) =>
       this.log('error', `Voice connection error: ${err.message}`)
@@ -796,6 +804,21 @@ class ChatterLayerEngine {
       if (state.channel.members?.has(userId)) this.setupStream(userId);
     }
     this.emitMembers();
+
+    // A move brings a new voice session, and subscriptions made before it can
+    // go quiet. Resubscribe once the new one is up, as after a dropped call.
+    const move = ++this.moves;
+    const connection = this.connection;
+    if (!connection) return;
+    entersState(connection, VoiceConnectionStatus.Ready, this.rejoinTimeoutMs)
+      .then(() => {
+        if (move === this.moves && connection === this.connection && !this.stopping) {
+          this.rebuildStreams();
+        }
+      })
+      .catch(() => {
+        /* the Disconnected handler owns anything that doesn't come back */
+      });
   }
 
   /**
@@ -821,7 +844,19 @@ class ChatterLayerEngine {
       return;
     }
     this.log('info', `Following ${who} to #${target.name}…`);
-    this.connection.rejoin({ channelId: target.id, selfDeaf: false, selfMute: true });
+    this.ownJoin(() =>
+      this.connection.rejoin({ channelId: target.id, selfDeaf: false, selfMute: true })
+    );
+  }
+
+  /** Runs a join the engine asked for, so the rejoin hold sends it at once. */
+  ownJoin(fn) {
+    this.joining++;
+    try {
+      return fn();
+    } finally {
+      this.joining--;
+    }
   }
 
   setFollow(userId) {
@@ -897,7 +932,7 @@ class ChatterLayerEngine {
       const status = connection.state.status;
       if (status === VoiceConnectionStatus.Ready) return true;
       if (status === VoiceConnectionStatus.Destroyed) return false;
-      connection.rejoin();
+      this.ownJoin(() => connection.rejoin());
       try {
         await entersState(connection, VoiceConnectionStatus.Ready, this.rejoinTimeoutMs);
         return true;
@@ -908,10 +943,17 @@ class ChatterLayerEngine {
     return false;
   }
 
-  /** Fresh audio subscriptions after a rejoin — the old ones may be stale. */
+  /**
+   * Fresh audio subscriptions after a rejoin or a move — the old ones may be
+   * stale. The mic never went through Discord, so it's left running.
+   */
   rebuildStreams() {
-    for (const userId of [...this.streams.keys()]) this.teardownStream(userId);
-    for (const userId of this.selected) this.setupStream(userId);
+    for (const userId of [...this.streams.keys()]) {
+      if (userId !== MIC_ID) this.teardownStream(userId);
+    }
+    for (const userId of this.selected) {
+      if (userId !== MIC_ID) this.setupStream(userId);
+    }
   }
 
   /** Give up on the call: free the model, and tell everyone why. */
