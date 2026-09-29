@@ -26,7 +26,7 @@ export function GetIt() {
             }
           />
 
-          <p className="note mt-6 max-w-[38rem]">
+          <p className="note mt-6 max-w-152">
             The builds aren&rsquo;t code-signed, because certificates cost money this project
             isn&rsquo;t spending. Windows will show a SmartScreen warning the first time: More
             info, then Run anyway. On macOS the app can clear Gatekeeper&rsquo;s quarantine flag

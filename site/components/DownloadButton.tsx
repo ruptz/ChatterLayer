@@ -123,7 +123,7 @@ export function DownloadButton({ aside }: { aside?: ReactNode }) {
           </a>
           {aside}
         </div>
-        <p className="note mt-4 max-w-[34rem]">
+        <p className="note mt-4 max-w-136">
           It runs on your streaming PC, not your phone. Open this page there and the button picks
           the right file.
         </p>
@@ -156,7 +156,7 @@ export function DownloadButton({ aside }: { aside?: ReactNode }) {
 
       <p className="tnum mt-4 text-[0.9375rem] font-bold text-ink-3">{meta}</p>
 
-      <p className="note mt-2 max-w-[38rem]">
+      <p className="note mt-2 max-w-152">
         Or:{' '}
         {others.map((download) => (
           <span key={download.key}>
@@ -177,7 +177,7 @@ export function DownloadButton({ aside }: { aside?: ReactNode }) {
 
       <div aria-live="polite">
         {started ? (
-          <div className="slab-sm mt-8 max-w-[38rem]">
+          <div className="slab-sm mt-8 max-w-152">
             <p className="label border-b-[3px] border-ink bg-s2 px-5 py-3">
               Your download has started
             </p>
@@ -193,7 +193,7 @@ export function DownloadButton({ aside }: { aside?: ReactNode }) {
                   }`}
                 >
                   <span className="tnum font-extrabold">{index + 1}</span>
-                  <div className="text-[1rem] leading-[1.5] text-ink-2">
+                  <div className="text-[1rem] leading-normal text-ink-2">
                     {step.text}
                     {step.code ? (
                       <code className="slab-flat mt-2.5 block overflow-x-auto px-3.5 py-2.5 font-mono text-[0.875rem] font-medium whitespace-pre text-ink">

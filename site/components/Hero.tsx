@@ -17,7 +17,7 @@ export function Hero() {
 
         <div className="mt-12 grid12 gap-y-10">
           <div className="col-span-12 lg:col-span-7">
-            <p className="max-w-[34rem] text-[1.1875rem] leading-[1.55] text-ink-2">
+            <p className="max-w-136 text-[1.1875rem] leading-[1.55] text-ink-2">
               ChatterLayer puts a bot in your Discord voice call, transcribes whoever you switch
               on, and draws their words into OBS in their own colour. Or skip the bot and caption
               just your mic. The speech never leaves your PC.

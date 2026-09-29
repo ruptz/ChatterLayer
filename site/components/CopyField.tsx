@@ -27,7 +27,7 @@ export function CopyField({ value, label }: { value: string; label: string }) {
   };
 
   return (
-    <div className="slab-sm flex max-w-[34rem] items-stretch">
+    <div className="slab-sm flex max-w-136 items-stretch">
       <input
         readOnly
         value={value}
