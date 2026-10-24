@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Tag matches the project version
         if: github.ref_type == 'tag' || inputs.tag
         run: |
@@ -116,7 +116,7 @@ jobs:
         shell: bash
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -221,7 +221,7 @@ jobs:
     if: (github.ref_type == 'tag' || inputs.tag) && !cancelled()
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Resolve the tag to publish
         id: tag
