@@ -33,7 +33,7 @@ songbird = { version = "0.6.1", features = ["receive"] }
 libloading = "0.8"
 # Loaded from onnxruntime.dll at runtime: the static build needs a newer
 # MSVC standard library than some machines (and VS 2019) link against.
-ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "load-dynamic", "api-23"] }
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "load-dynamic", "api-23"] }
 rustfft = "6"
 keyring = { version = "3", features = ["windows-native", "apple-native", "sync-secret-service", "crypto-rust"] }
 base64 = "0.22"
