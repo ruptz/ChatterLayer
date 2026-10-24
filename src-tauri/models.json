@@ -1,0 +1,342 @@
+{
+  "rank": [
+    "parakeet-tdt-0.6b-v2-onnx",
+    "whisper-small-en-onnx",
+    "moonshine-base-onnx",
+    "vosk-model-en-us-0.42-gigaspeech",
+    "vosk-model-en-us-0.22",
+    "whisper-base-en-onnx",
+    "whisper-tiny-en-onnx",
+    "vosk-model-en-us-0.22-lgraph",
+    "vosk-model-small-en-us-0.15"
+  ],
+  "catalog": [
+    {
+      "key": "small",
+      "engine": "vosk",
+      "dir": "vosk-model-small-en-us-0.15",
+      "url": "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip",
+      "bytes": 41205931,
+      "sha256": "30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498",
+      "label": "Vosk Small",
+      "note": "fastest, lowest accuracy",
+      "downloadMB": 40,
+      "ramMB": 170,
+      "perSpeakerMB": 12,
+      "maxSpeakers": 7,
+      "blurb": "Lightest and fastest, and the lowest accuracy here."
+    },
+    {
+      "key": "medium",
+      "aliases": [
+        "lgraph"
+      ],
+      "engine": "vosk",
+      "dir": "vosk-model-en-us-0.22-lgraph",
+      "url": "https://alphacephei.com/vosk/models/vosk-model-en-us-0.22-lgraph.zip",
+      "bytes": 130557655,
+      "sha256": "d9838b4aaa82a75c4a17f5aca300eaca129aaab2a7cbf951bafbb500eb9c4334",
+      "label": "Vosk Medium",
+      "note": "live word-by-word, no punctuation",
+      "downloadMB": 128,
+      "ramMB": 420,
+      "perSpeakerMB": 51,
+      "maxSpeakers": 7,
+      "blurb": "The best of the streaming models: captions appear word by word as someone talks, rather than a phrase at a time. Pick this over Moonshine if that immediacy matters more to you than punctuation and accuracy."
+    },
+    {
+      "key": "large",
+      "engine": "vosk",
+      "dir": "vosk-model-en-us-0.22",
+      "url": "https://alphacephei.com/vosk/models/vosk-model-en-us-0.22.zip",
+      "bytes": 1913365522,
+      "md5": "228741ed058893e403dce60bdd659f42",
+      "label": "Vosk Large",
+      "note": "high accuracy, heavy",
+      "downloadMB": 1800,
+      "ramMB": 5000,
+      "perSpeakerMB": 60,
+      "maxSpeakers": 4,
+      "blurb": "High accuracy, trained mostly on read speech. Slow to load."
+    },
+    {
+      "key": "best",
+      "aliases": [
+        "gigaspeech"
+      ],
+      "engine": "vosk",
+      "dir": "vosk-model-en-us-0.42-gigaspeech",
+      "url": "https://alphacephei.com/vosk/models/vosk-model-en-us-0.42-gigaspeech.zip",
+      "bytes": 2423807363,
+      "md5": "db1202c15b40ea4b1ec27b85a90dffbe",
+      "label": "Vosk Gigaspeech",
+      "note": "best Vosk accuracy, very heavy",
+      "downloadMB": 2300,
+      "ramMB": 6800,
+      "perSpeakerMB": 80,
+      "maxSpeakers": 3,
+      "blurb": "Best Vosk accuracy, trained on conversational audio rather than audiobooks. Needs ~7 GB of RAM and about 16x the CPU of Vosk Small."
+    },
+    {
+      "key": "moonshine-base",
+      "aliases": [
+        "moonshine"
+      ],
+      "engine": "moonshine",
+      "dir": "moonshine-base-onnx",
+      "label": "Moonshine Base",
+      "note": "recommended for lighter PCs",
+      "downloadMB": 251,
+      "ramMB": 550,
+      "perSpeakerMB": 3,
+      "maxSpeakers": 6,
+      "recommended": "light",
+      "blurb": "Better accuracy than Vosk Medium, with punctuation, and the fastest here at about 150 ms per caption. Cost scales with the length of the phrase, so short replies are nearly free.",
+      "files": [
+        {
+          "url": "https://huggingface.co/onnx-community/moonshine-base-ONNX/resolve/b1e9b6aae3c3c7298f10c3798393fdf38e8fbbad/onnx/encoder_model.onnx",
+          "as": "encoder_model.onnx",
+          "bytes": 80818781,
+          "sha256": "153e128e7abd64a74ee47f2c3f585c3171c4d46cbb368b032827934c4e01e779"
+        },
+        {
+          "url": "https://huggingface.co/onnx-community/moonshine-base-ONNX/resolve/b1e9b6aae3c3c7298f10c3798393fdf38e8fbbad/onnx/decoder_model_merged.onnx",
+          "as": "decoder_model_merged.onnx",
+          "bytes": 166211345,
+          "sha256": "58778763ca8438963190244d6b26572bdca2cedec56a4b91e828f3f2d69ef3c5"
+        },
+        {
+          "url": "https://huggingface.co/onnx-community/moonshine-base-ONNX/resolve/b1e9b6aae3c3c7298f10c3798393fdf38e8fbbad/config.json",
+          "as": "config.json",
+          "bytes": 922,
+          "sha256": "fab7241d1e9fc6c2370c4c6dfb5da79bb54d67ed9ab6b507ac51d29d2abe01d1"
+        },
+        {
+          "url": "https://huggingface.co/onnx-community/moonshine-base-ONNX/resolve/b1e9b6aae3c3c7298f10c3798393fdf38e8fbbad/generation_config.json",
+          "as": "generation_config.json",
+          "bytes": 147,
+          "sha256": "f9b3f711b57be7def2e50a8942f64f36ee0a55fad5b84ff93a687b6c5bcc1d44"
+        },
+        {
+          "url": "https://huggingface.co/onnx-community/moonshine-base-ONNX/resolve/b1e9b6aae3c3c7298f10c3798393fdf38e8fbbad/preprocessor_config.json",
+          "as": "preprocessor_config.json",
+          "bytes": 128,
+          "sha256": "fa43a7017ef85cd1d0fba0d9aae77c8adb16990ae6f11115631f41ec5d8aa679"
+        },
+        {
+          "url": "https://huggingface.co/onnx-community/moonshine-base-ONNX/resolve/b1e9b6aae3c3c7298f10c3798393fdf38e8fbbad/tokenizer.json",
+          "as": "tokenizer.json",
+          "bytes": 3761754,
+          "sha256": "7b913404bdd039af4756783218af4440bc07fb7d6d8258d677e34f95b3ec416f"
+        }
+      ]
+    },
+    {
+      "key": "whisper-tiny",
+      "engine": "whisper",
+      "dir": "whisper-tiny-en-onnx",
+      "label": "Whisper Tiny",
+      "note": "quick, adds punctuation",
+      "downloadMB": 43,
+      "ramMB": 420,
+      "perSpeakerMB": 3,
+      "maxSpeakers": 2,
+      "blurb": "Roughly Vosk Medium accuracy, with punctuation and casing. Slower than its size suggests: every Whisper caption pays for a padded 30-second window however short the phrase was.",
+      "files": [
+        {
+          "url": "https://huggingface.co/Xenova/whisper-tiny.en/resolve/79fb389fc764e7c395bd330e9531d9d32ada7049/onnx/encoder_model_quantized.onnx",
+          "as": "encoder_model.onnx",
+          "bytes": 10124913,
+          "sha256": "8cc3c6f8563d1b3fbd2c5af9f64c2bed8b020bc593c402d1ef53b9f08fbf1b90"
+        },
+        {
+          "url": "https://huggingface.co/Xenova/whisper-tiny.en/resolve/79fb389fc764e7c395bd330e9531d9d32ada7049/onnx/decoder_model_merged_quantized.onnx",
+          "as": "decoder_model_merged.onnx",
+          "bytes": 30727382,
+          "sha256": "dbb2e063b7fbc41d9803b9698f93ecb035c50cbb3fb87b56cb131e4a5eb99059"
+        },
+        {
+          "url": "https://huggingface.co/Xenova/whisper-tiny.en/resolve/79fb389fc764e7c395bd330e9531d9d32ada7049/config.json",
+          "as": "config.json",
+          "bytes": 2202,
+          "sha256": "37a1073be00d19118c06557896c7c148598f4d8277edc0f5bc07c9f5554839f1"
+        },
+        {
+          "url": "https://huggingface.co/Xenova/whisper-tiny.en/resolve/79fb389fc764e7c395bd330e9531d9d32ada7049/generation_config.json",
+          "as": "generation_config.json",
+          "bytes": 1590,
+          "sha256": "132c95ba9db45f4498f2eab3fea7c1d6a174005010f8f6b7d20cfd5e9795996b"
+        },
+        {
+          "url": "https://huggingface.co/Xenova/whisper-tiny.en/resolve/79fb389fc764e7c395bd330e9531d9d32ada7049/preprocessor_config.json",
+          "as": "preprocessor_config.json",
+          "bytes": 339,
+          "sha256": "a6a76d28c93edb273669eb9e0b0636a2bddbb1272c3261e47b7ca6dfdbac1b8d"
+        },
+        {
+          "url": "https://huggingface.co/Xenova/whisper-tiny.en/resolve/79fb389fc764e7c395bd330e9531d9d32ada7049/tokenizer.json",
+          "as": "tokenizer.json",
+          "bytes": 2128494,
+          "sha256": "c6ee8f089220a5b1188f6426456772572671c6141ae007eecb83c6a8349f5deb"
+        }
+      ]
+    },
+    {
+      "key": "whisper-base",
+      "aliases": [
+        "whisper"
+      ],
+      "engine": "whisper",
+      "dir": "whisper-base-en-onnx",
+      "label": "Whisper Base",
+      "note": "good accuracy with punctuation",
+      "downloadMB": 79,
+      "ramMB": 700,
+      "perSpeakerMB": 3,
+      "maxSpeakers": 1,
+      "blurb": "Good accuracy with punctuation and casing, but about a second per caption — Moonshine Base is more accurate and six times quicker.",
+      "files": [
+        {
+          "url": "https://huggingface.co/Xenova/whisper-base.en/resolve/95bf40a508535962c6483ead40270b2e32267508/onnx/encoder_model_quantized.onnx",
+          "as": "encoder_model.onnx",
+          "bytes": 23200856,
+          "sha256": "d0d4e59e2842617b39787cece73d7e8f76f99b1697d3386c0e682eca2269f4a1"
+        },
+        {
+          "url": "https://huggingface.co/Xenova/whisper-base.en/resolve/95bf40a508535962c6483ead40270b2e32267508/onnx/decoder_model_merged_quantized.onnx",
+          "as": "decoder_model_merged.onnx",
+          "bytes": 53707027,
+          "sha256": "a25afc5858a20aabb7652cb2d555996ebe10691a69bbdb423d5073d52f060325"
+        },
+        {
+          "url": "https://huggingface.co/Xenova/whisper-base.en/resolve/95bf40a508535962c6483ead40270b2e32267508/config.json",
+          "as": "config.json",
+          "bytes": 2202,
+          "sha256": "5c390f2c6ba84ddeb7e362cd8b2123832911407850174e64d7081ccc36df2d64"
+        },
+        {
+          "url": "https://huggingface.co/Xenova/whisper-base.en/resolve/95bf40a508535962c6483ead40270b2e32267508/generation_config.json",
+          "as": "generation_config.json",
+          "bytes": 1500,
+          "sha256": "1e57ed56ad1bd7f08a49ece7fe7daada674573805a35f8bdbbe68380aab5b1ee"
+        },
+        {
+          "url": "https://huggingface.co/Xenova/whisper-base.en/resolve/95bf40a508535962c6483ead40270b2e32267508/preprocessor_config.json",
+          "as": "preprocessor_config.json",
+          "bytes": 339,
+          "sha256": "a6a76d28c93edb273669eb9e0b0636a2bddbb1272c3261e47b7ca6dfdbac1b8d"
+        },
+        {
+          "url": "https://huggingface.co/Xenova/whisper-base.en/resolve/95bf40a508535962c6483ead40270b2e32267508/tokenizer.json",
+          "as": "tokenizer.json",
+          "bytes": 2128494,
+          "sha256": "c6ee8f089220a5b1188f6426456772572671c6141ae007eecb83c6a8349f5deb"
+        }
+      ]
+    },
+    {
+      "key": "whisper-small",
+      "engine": "whisper",
+      "dir": "whisper-small-en-onnx",
+      "label": "Whisper Small",
+      "note": "high accuracy, heavy on CPU",
+      "downloadMB": 251,
+      "ramMB": 1800,
+      "perSpeakerMB": 3,
+      "maxSpeakers": 1,
+      "blurb": "The most accurate Whisper here, and much the slowest: over 2 seconds per caption on a mid-range CPU.",
+      "files": [
+        {
+          "url": "https://huggingface.co/Xenova/whisper-small.en/resolve/fa16a75f5d91e83ecb6a2ccb690f14d91ef00ca4/onnx/encoder_model_quantized.onnx",
+          "as": "encoder_model.onnx",
+          "bytes": 92324819,
+          "sha256": "dd37efa07dad7619592ef849a40317dcfd182a2e632275a53a023f02f685cfa7"
+        },
+        {
+          "url": "https://huggingface.co/Xenova/whisper-small.en/resolve/fa16a75f5d91e83ecb6a2ccb690f14d91ef00ca4/onnx/decoder_model_merged_quantized.onnx",
+          "as": "decoder_model_merged.onnx",
+          "bytes": 156780181,
+          "sha256": "7cff5df61a1809654a5e62d89cbb99e8231b229f41412ab626a1d8fff77397ab"
+        },
+        {
+          "url": "https://huggingface.co/Xenova/whisper-small.en/resolve/fa16a75f5d91e83ecb6a2ccb690f14d91ef00ca4/config.json",
+          "as": "config.json",
+          "bytes": 2208,
+          "sha256": "afddc76e1d6b2e13e5a85a385d55d272ed61f6797d7d32895492620387336cf6"
+        },
+        {
+          "url": "https://huggingface.co/Xenova/whisper-small.en/resolve/fa16a75f5d91e83ecb6a2ccb690f14d91ef00ca4/generation_config.json",
+          "as": "generation_config.json",
+          "bytes": 1900,
+          "sha256": "dde54f4ed982cf4f57450f2d23eb5f97dd64dbc390c66a635a34a57e965b16a7"
+        },
+        {
+          "url": "https://huggingface.co/Xenova/whisper-small.en/resolve/fa16a75f5d91e83ecb6a2ccb690f14d91ef00ca4/preprocessor_config.json",
+          "as": "preprocessor_config.json",
+          "bytes": 339,
+          "sha256": "a6a76d28c93edb273669eb9e0b0636a2bddbb1272c3261e47b7ca6dfdbac1b8d"
+        },
+        {
+          "url": "https://huggingface.co/Xenova/whisper-small.en/resolve/fa16a75f5d91e83ecb6a2ccb690f14d91ef00ca4/tokenizer.json",
+          "as": "tokenizer.json",
+          "bytes": 2128494,
+          "sha256": "c6ee8f089220a5b1188f6426456772572671c6141ae007eecb83c6a8349f5deb"
+        }
+      ]
+    },
+    {
+      "key": "parakeet",
+      "aliases": [
+        "parakeet-tdt"
+      ],
+      "engine": "parakeet",
+      "dir": "parakeet-tdt-0.6b-v2-onnx",
+      "label": "Parakeet TDT 0.6B",
+      "note": "best accuracy, recommended",
+      "downloadMB": 2513,
+      "ramMB": 2600,
+      "perSpeakerMB": 3,
+      "maxSpeakers": 4,
+      "recommended": "capable",
+      "blurb": "The most accurate model here, and quicker than its size suggests — about 290 ms per caption, because it transcribes only the phrase. Recommended for any PC with 16 GB of RAM: 2.5 GB of weights, loaded once and shared.",
+      "files": [
+        {
+          "url": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/0bbb45a3365852604aef28b538a8f066f4ccaa85/encoder-model.onnx",
+          "as": "encoder-model.onnx",
+          "bytes": 41770866,
+          "sha256": "3987bcd28175d829d12888a996a84e8f62a0e374d9ffd640662c1515adc679d3"
+        },
+        {
+          "url": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/0bbb45a3365852604aef28b538a8f066f4ccaa85/encoder-model.onnx.data",
+          "as": "encoder-model.onnx.data",
+          "bytes": 2435420160,
+          "sha256": "4dab7362d4874d85965045b1e41b2d61dd2cc0fb25671a7f6b3dc47bf120cc41"
+        },
+        {
+          "url": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/0bbb45a3365852604aef28b538a8f066f4ccaa85/decoder_joint-model.onnx",
+          "as": "decoder_joint-model.onnx",
+          "bytes": 35792059,
+          "sha256": "cbb52a07bd70ab5b67f8439d4b3cd8704b18467b4430bcacb5adabe154b8d191"
+        },
+        {
+          "url": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/0bbb45a3365852604aef28b538a8f066f4ccaa85/nemo128.onnx",
+          "as": "nemo128.onnx",
+          "bytes": 139764,
+          "sha256": "a9fde1486ebfcc08f328d75ad4610c67835fea58c73ba57e3209a6f6cf019e9f"
+        },
+        {
+          "url": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/0bbb45a3365852604aef28b538a8f066f4ccaa85/vocab.txt",
+          "as": "vocab.txt",
+          "bytes": 9384,
+          "sha256": "ec182b70dd42113aff6c5372c75cac58c952443eb22322f57bbd7f53977d497d"
+        },
+        {
+          "url": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/0bbb45a3365852604aef28b538a8f066f4ccaa85/config.json",
+          "as": "config.json",
+          "bytes": 97,
+          "sha256": "666903c76b9798caf2c210afd4f6cd60b08a8dbf9800ec8d7a3bc0d2148ac466"
+        }
+      ]
+    }
+  ]
+}

@@ -4,9 +4,6 @@ node_modules/
 vendor/
 models/
 
-# Packaged installers
-dist/
-
 # Local test artifacts
 test-audio.wav
 *.log
@@ -17,5 +14,8 @@ chatterlayer-config.json
 .DS_Store
 Thumbs.db
 todo.md
-todo-website.md
-release-todo.md
+
+# Tauri build output and this machine's CMake location
+src-tauri/target/
+src-tauri/gen/
+src-tauri/.cargo/

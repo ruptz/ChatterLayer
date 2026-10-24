@@ -10,11 +10,8 @@ export function SiteHeader() {
       <div className="page">
         <div className="flex h-[4.5rem] items-center justify-between gap-6">
           <a href="#top" className="flex items-center gap-3">
-            {/* The SVG, not the PNG: it's drawn on a 16-unit grid so every
-                edge lands on a whole pixel at exactly this size, and it stays
-                crisp on a 200% display. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.svg" alt="" width={32} height={32} className="block" />
+            <img src="/logo.png" alt="" width={32} height={32} className="block" />
             <span className="text-[1.25rem] font-extrabold tracking-[-0.03em]">{site.name}</span>
           </a>
 

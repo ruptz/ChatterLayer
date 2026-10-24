@@ -4,6 +4,3 @@ out/
 .vercel/
 *.tsbuildinfo
 next-env.d.ts
-
-# Written by scripts/sync-from-app.mjs — generated from the app, never edited.
-lib/app-facts.json

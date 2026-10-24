@@ -170,6 +170,10 @@ export const facts = [
     body: 'Everyone in the call starts switched off. You turn on the people who’ve said yes, and you can change that mid-call without reconnecting.',
   },
   {
+    label: 'Light on your PC',
+    body: 'It’s a 30 MB download and takes about 95 MB once installed. Waiting in the tray, it uses next to no CPU. While it captions, nearly all the work is the speech model, and since 0.5 that runs as native code: on Parakeet it uses about 15% less CPU than 0.4 did, and the first caption arrives about 4 seconds sooner.',
+  },
+  {
     label: 'It’s just a browser source',
     body: 'The overlay is an ordinary OBS browser source with a transparent background. No plugin, no window capture, nothing to configure. It reconnects on its own, so you can add it before the app is even open.',
   },
@@ -216,7 +220,7 @@ export const pipeline = [
     id: 'transcribe',
     kicker: 'Your PC',
     title: 'Your PC does the listening',
-    body: 'The audio is decoded, resampled and handed to the speech engine on its own thread. You choose the model, nine of them across four engines. It loads once and serves the whole call, so a seventh person doesn’t mean a seventh copy of it sitting in memory.',
+    body: 'Discord’s audio is decoded straight to the format the speech engine wants and handed to it on its own thread. You choose the model, nine of them across four engines. It loads once and serves the whole call, so a seventh person doesn’t mean a seventh copy of it sitting in memory.',
   },
   {
     id: 'render',
@@ -295,7 +299,7 @@ const macAfter: AfterStep[] = [
   { text: 'Open the .dmg and drag ChatterLayer into Applications.' },
   { text: 'The first time, right-click the app and choose Open, then Open again. It isn’t signed, so a double-click gets refused.' },
   {
-    text: 'If macOS says the app is damaged, it isn’t. That’s the quarantine flag every unsigned download gets. ChatterLayer offers to clear it in one click, or you can do it yourself:',
+    text: 'If macOS says the app is damaged, it isn’t. That’s the quarantine flag every unsigned download gets. Clear it once and it opens normally from then on:',
     code: 'xattr -dr com.apple.quarantine /Applications/ChatterLayer.app',
   },
 ];
@@ -311,13 +315,16 @@ export const downloads: Download[] = [
     after: windowsAfter,
   },
   {
-    key: 'win-portable',
+    key: 'win-zip',
     platform: 'windows',
-    label: 'Windows portable',
+    label: 'Windows, no installer',
     button: 'Download for Windows',
-    kind: 'Portable',
-    match: /-portable\.exe$/,
-    after: windowsAfter,
+    kind: 'Zip, no installer',
+    match: /-win\.zip$/,
+    after: [
+      { text: 'Unzip it anywhere you like, then run ChatterLayer.exe from that folder.' },
+      { text: 'Windows SmartScreen puts up a blue box the first time: click More info, then Run anyway.' },
+    ],
   },
   {
     key: 'mac-arm',
@@ -325,7 +332,7 @@ export const downloads: Download[] = [
     label: 'macOS, Apple Silicon',
     button: 'Download for Mac',
     kind: 'Apple Silicon',
-    match: /-arm64\.dmg$/,
+    match: /-macos-arm64\.dmg$/,
     after: macAfter,
   },
   {
@@ -334,7 +341,7 @@ export const downloads: Download[] = [
     label: 'macOS, Intel',
     button: 'Download for Mac',
     kind: 'Intel',
-    match: /^(?!.*-arm64).*\.dmg$/,
+    match: /-macos-x64\.dmg$/,
     after: macAfter,
   },
   {
@@ -343,7 +350,19 @@ export const downloads: Download[] = [
     label: 'Linux AppImage',
     button: 'Download for Linux',
     kind: 'AppImage',
-    match: /\.AppImage$/,
+    match: /-linux-x64\.AppImage$/,
+    after: [
+      { text: 'Make it executable. In most file managers that’s Properties, then Allow executing as program. Or:', code: 'chmod +x {file}' },
+      { text: 'Double-click it. There’s nothing to install.' },
+    ],
+  },
+  {
+    key: 'appimage-arm',
+    platform: 'linux',
+    label: 'Linux AppImage, ARM64',
+    button: 'Download for Linux',
+    kind: 'AppImage, ARM64',
+    match: /-linux-arm64\.AppImage$/,
     after: [
       { text: 'Make it executable. In most file managers that’s Properties, then Allow executing as program. Or:', code: 'chmod +x {file}' },
       { text: 'Double-click it. There’s nothing to install.' },
@@ -355,7 +374,7 @@ export const downloads: Download[] = [
     label: 'Linux .deb',
     button: 'Download for Linux',
     kind: '.deb package',
-    match: /\.deb$/,
+    match: /-linux-x64\.deb$/,
     after: [
       { text: 'Install it from the folder you saved it to:', code: 'sudo apt install ./{file}' },
       { text: 'ChatterLayer shows up in your applications menu.' },
@@ -379,9 +398,9 @@ export type SetupStep = {
 export const setupSteps: SetupStep[] = [
   {
     title: 'Install it',
-    body: 'There’s a normal installer, and a portable build if you’d rather not install anything. The whole setup runs about ten minutes, and most of that is watching a download bar.',
+    body: 'On Windows there’s an installer, or a zip if you’d rather not install anything. Macs get a .dmg, and Linux an AppImage or a .deb. The whole setup runs about ten minutes, and most of that is watching a download bar.',
     link: { label: 'Get the download', href: '#download' },
-    note: 'None of the builds are code-signed, so Windows SmartScreen throws up a blue box the first time you run it: click More info, then Run anyway. On macOS the app offers to clear Gatekeeper’s quarantine flag in one click, so you never have to open Terminal.',
+    note: 'None of the builds are code-signed, so Windows SmartScreen throws up a blue box the first time you run it: click More info, then Run anyway. On macOS, Gatekeeper may call the app damaged; one Terminal command clears that, and it’s shown right after you download.',
   },
   {
     title: 'Pick a speech model',

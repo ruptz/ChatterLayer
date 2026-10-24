@@ -1,0 +1,62 @@
+[package]
+name = "chatterlayer"
+version = "0.5.0"
+description = "Live, colour-coded Discord voice captions for OBS. Free, offline, fully local."
+authors = ["ruptz"]
+license = "MIT"
+edition = "2024"
+
+[lib]
+# The _lib suffix keeps the library's name apart from the binary's, which
+# Cargo otherwise trips over on Windows.
+name = "chatterlayer_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-single-instance = "2"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["net", "sync", "time", "macros", "rt-multi-thread", "fs", "process", "io-util"] }
+axum = { version = "0.8", features = ["ws"] }
+futures-util = "0.3"
+serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "model", "cache", "rustls_backend", "voice"] }
+songbird = { version = "0.6.1", features = ["receive"] }
+libloading = "0.8"
+# Loaded from onnxruntime.dll at runtime: the static build needs a newer
+# MSVC standard library than some machines (and VS 2019) link against.
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "load-dynamic", "api-23"] }
+rustfft = "6"
+keyring = { version = "3", features = ["windows-native", "apple-native", "sync-secret-service", "crypto-rust"] }
+base64 = "0.22"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+md-5 = "0.10"
+url = "2"
+flate2 = "1"
+sha2 = "0.10"
+getrandom = "0.3"
+
+[target.'cfg(windows)'.dependencies]
+# The same versions Tauri's WebView2 backend uses, so its controller type fits.
+webview2-com = "0.39"
+windows = "0.62"
+aes-gcm = "0.10"
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_SystemInformation", "Win32_System_Registry"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+strip = true

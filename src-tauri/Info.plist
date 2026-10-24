@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- macOS refuses microphone access to an app that doesn't say why. -->
+  <key>NSMicrophoneUsageDescription</key>
+  <string>ChatterLayer captions your own mic when you choose My mic or Both. The audio never leaves this Mac.</string>
+</dict>
+</plist>

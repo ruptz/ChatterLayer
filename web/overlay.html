@@ -16,10 +16,12 @@
         height: 100%;
         background: transparent;
         overflow: hidden;
-        font-family: "Segoe UI", Inter, system-ui, -apple-system, sans-serif;
+        font-family: var(--font, "Segoe UI", Inter, system-ui, -apple-system, sans-serif);
         -webkit-font-smoothing: antialiased;
       }
 
+      /* The styling settings land on #stage as data attributes and custom
+         properties, so a user's own CSS can read or override every one. */
       #stage {
         position: absolute;
         inset: 0;
@@ -31,27 +33,61 @@
         padding: 24px;
         box-sizing: border-box;
       }
+      #stage[data-pos="top"] {
+        justify-content: flex-start;
+      }
+      #stage[data-align="center"] {
+        align-items: center;
+        text-align: center;
+      }
+      #stage[data-align="right"] {
+        align-items: flex-end;
+        text-align: right;
+      }
 
       .caption {
         --color: #4ecdc4;
-        max-width: 92%;
+        max-width: var(--max-width, 92%);
         padding: 10px 16px;
         border-radius: 10px;
         border-left: 5px solid var(--color);
-        background: rgba(8, 10, 14, 0.72);
+        background: rgba(8, 10, 14, var(--bg, 0.72));
         /* Blur keeps text legible over busy gameplay without going fully opaque. */
         backdrop-filter: blur(6px);
         -webkit-backdrop-filter: blur(6px);
-        color: #fff;
+        color: var(--text-color, #fff);
         font-size: var(--size, 30px);
         line-height: 1.32;
         /* Double shadow: a tight dark halo for contrast on light scenes, plus a
-           soft drop for depth. */
-        text-shadow: 0 0 4px rgba(0, 0, 0, 0.95), 0 2px 6px rgba(0, 0, 0, 0.65);
+           soft drop for depth. An outline, when set, is prepended to it. */
+        text-shadow: var(--shadow, 0 0 4px rgba(0, 0, 0, 0.95), 0 2px 6px rgba(0, 0, 0, 0.65));
         box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4);
         animation: rise 0.22s cubic-bezier(0.22, 1, 0.36, 1);
         transition: opacity 0.45s ease, transform 0.45s ease;
+        /* A thick outline eats the gaps between letters; give them back. */
+        letter-spacing: calc(var(--outline, 0px) / 4);
+        word-spacing: calc(var(--outline, 0px) / 2);
         word-wrap: break-word;
+      }
+
+      /* Broadcast subtitles: a flat box, no accent bar. */
+      #stage[data-look="box"] .caption {
+        padding: 6px 14px;
+        border-radius: 3px;
+        border-left: 0;
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+      }
+
+      /* Bare text, carried by its outline. */
+      #stage[data-look="text"] .caption {
+        padding: 0 4px;
+        border-left: 0;
+        background: none;
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
       }
 
       .caption.leaving {
@@ -69,7 +105,7 @@
         margin-right: 10px;
         /* Slightly heavier halo — the colour carries the speaker identity, so it
            must survive compression and bright backgrounds. */
-        text-shadow: 0 0 5px rgba(0, 0, 0, 1), 0 2px 5px rgba(0, 0, 0, 0.8);
+        text-shadow: var(--shadow-name, 0 0 5px rgba(0, 0, 0, 1), 0 2px 5px rgba(0, 0, 0, 0.8));
       }
 
       @keyframes rise {
@@ -99,6 +135,10 @@
         display: none;
       }
     </style>
+    <!-- @font-face rules for the fonts folder, then the user's own CSS, so it
+         comes after and wins every tie. -->
+    <style id="fonts"></style>
+    <style id="custom"></style>
   </head>
   <body>
     <div id="stage"></div>
@@ -110,7 +150,12 @@
 
         const stage = document.getElementById('stage');
         const offline = document.getElementById('offline');
+        const fontRules = document.getElementById('fonts');
+        const customCss = document.getElementById('custom');
         const params = new URLSearchParams(location.search);
+        // The app's own style preview: sample lines that never expire, and
+        // not counted as OBS by the server.
+        const preview = params.has('preview');
 
         const DEFAULTS = {
           fontSize: 30,
@@ -118,7 +163,17 @@
           maxLines: 4,
           showPartials: true,
           showSpeakerName: true,
+          look: 'card',
+          position: 'bottom',
+          align: 'left',
+          background: 72,
+          maxWidth: 92,
+          outline: 0,
+          font: '',
+          textColor: '#ffffff',
+          customCss: '',
         };
+        const FALLBACK_FONTS = '"Segoe UI", Inter, system-ui, -apple-system, sans-serif';
 
         /**
          * Per-viewer overrides, read from the query string.
@@ -130,7 +185,9 @@
          * theirs mid-stream, so each streamer tunes their own browser source
          * without touching anyone else's.
          *
-         *   ?size=42&hold=5&lines=2&partials=0&names=0
+         *   ?size=42&hold=5&lines=2&partials=0&names=0&pos=top&align=center
+         *
+         * `css=0` drops the host's custom CSS for this one source.
          */
         function readOverrides() {
           const out = {};
@@ -156,33 +213,97 @@
           if (partials !== null) out.showPartials = partials;
           const names = bool('names');
           if (names !== null) out.showSpeakerName = names;
+          const pos = params.get('pos');
+          if (pos === 'top' || pos === 'bottom') out.position = pos;
+          const align = params.get('align');
+          if (['left', 'center', 'right'].includes(align)) out.align = align;
+          if (bool('css') === false) out.customCss = '';
           return out;
         }
 
         const overrides = readOverrides();
 
         /** Live settings: server values, with this viewer's overrides on top. */
-        let settings = { overlay: { ...DEFAULTS, ...overrides } };
+        let settings = { overlay: { ...DEFAULTS, ...overrides }, fonts: [] };
 
         /** Fold an incoming server payload in without losing the overrides. */
         function mergeSettings(incoming) {
           const from = (incoming && incoming.overlay) || {};
-          settings = { overlay: { ...DEFAULTS, ...from, ...overrides } };
+          const fonts = (incoming && incoming.fonts) || [];
+          settings = { overlay: { ...DEFAULTS, ...from, ...overrides }, fonts };
           applySettings();
         }
 
         /** userId -> element currently showing that speaker's partial text. */
         const partials = new Map();
 
-        function applySettings() {
-          document.documentElement.style.setProperty(
-            '--size',
-            `${settings.overlay.fontSize}px`
-          );
-          for (const node of stage.children) {
-            node.style.setProperty('--size', `${settings.overlay.fontSize}px`);
+        /** A ring of hard shadows reads as an outline on any scene. */
+        function outlineRing(px) {
+          if (!(px > 0)) return '';
+          const ring = [];
+          for (let i = 0; i < 16; i++) {
+            const a = (i / 16) * Math.PI * 2;
+            ring.push(`${(Math.cos(a) * px).toFixed(2)}px ${(Math.sin(a) * px).toFixed(2)}px 0 #000`);
           }
-          trim();
+          return `${ring.join(', ')}, `;
+        }
+
+        /** Bare family names: quotes or backslashes would break out of the rule. */
+        const family = (name) => String(name).replace(/["\\\n\r]/g, '').trim();
+
+        /**
+         * Fonts dropped into the app's fonts folder, served by the app so a
+         * co-streamer's OBS gets them too. The family is the file name without
+         * its extension. The access key rides along, as on the socket.
+         */
+        function applyFonts() {
+          const key = params.get('k');
+          const query = key ? `?k=${encodeURIComponent(key)}` : '';
+          fontRules.textContent = settings.fonts
+            .map((file) => {
+              const name = family(file.replace(/\.[^.]+$/, ''));
+              return `@font-face { font-family: "${name}"; src: url("/fonts/${encodeURIComponent(file)}${query}"); }`;
+            })
+            .join('\n');
+        }
+
+        function applySettings() {
+          const o = settings.overlay;
+          const root = document.documentElement.style;
+          root.setProperty('--size', `${o.fontSize}px`);
+          root.setProperty('--bg', String(Math.min(100, Math.max(0, Number(o.background))) / 100));
+          root.setProperty('--max-width', `${Math.min(100, Math.max(20, Number(o.maxWidth)))}%`);
+          root.setProperty('--text-color', o.textColor || '#ffffff');
+          const name = family(o.font || '');
+          root.setProperty('--font', name ? `"${name}", ${FALLBACK_FONTS}` : FALLBACK_FONTS);
+          const outline = Math.min(12, Number(o.outline) || 0);
+          root.setProperty('--outline', `${outline}px`);
+          const ring = outlineRing(outline);
+          root.setProperty('--shadow', `${ring}0 0 4px rgba(0, 0, 0, 0.95), 0 2px 6px rgba(0, 0, 0, 0.65)`);
+          root.setProperty('--shadow-name', `${ring}0 0 5px rgba(0, 0, 0, 1), 0 2px 5px rgba(0, 0, 0, 0.8)`);
+          stage.dataset.look = o.look;
+          stage.dataset.pos = o.position;
+          stage.dataset.align = o.align;
+          for (const node of stage.children) {
+            node.style.setProperty('--size', `${o.fontSize}px`);
+          }
+          applyFonts();
+          // textContent, never innerHTML: it stays a stylesheet, never markup.
+          customCss.textContent = o.customCss || '';
+          if (preview) showSamples();
+          else trim();
+        }
+
+        const SAMPLES = [
+          { userId: 'sample-1', username: 'Sam', color: '#4ecdc4', text: 'Okay, that boss fight was way harder than it looked.', isFinal: true },
+          { userId: 'sample-2', username: 'Mira', color: '#ff8a5c', text: 'You say that every single time we get to this part.', isFinal: true },
+          { userId: 'sample-3', username: 'Jonah', color: '#c792ea', text: 'Wait, which way is the', isFinal: false },
+        ];
+
+        /** The preview's fixed lines, rebuilt whenever the style changes. */
+        function showSamples() {
+          const show = settings.overlay.showPartials ? SAMPLES : SAMPLES.filter((s) => s.isFinal);
+          stage.replaceChildren(...show.slice(-settings.overlay.maxLines).map((s) => build(s, !s.isFinal)));
         }
 
         function trim() {
@@ -195,6 +316,8 @@
           div.className = `caption${isPartial ? ' partial' : ''}`;
           div.style.setProperty('--color', cap.color || '#4ecdc4');
           div.style.setProperty('--size', `${settings.overlay.fontSize}px`);
+          // Lets custom CSS style one person: .caption[data-user="1234"]
+          div.dataset.user = cap.userId || '';
 
           if (settings.overlay.showSpeakerName) {
             const who = document.createElement('span');
@@ -203,6 +326,7 @@
             div.appendChild(who);
           }
           const text = document.createElement('span');
+          text.className = 'text';
           text.textContent = cap.text;
           div.appendChild(text);
           return div;
@@ -284,8 +408,11 @@
           // is gated exactly like the page request, and the key only ever lives
           // in this URL — so re-read it rather than storing a copy anywhere.
           const key = params.get('k');
-          const query = key ? `?k=${encodeURIComponent(key)}` : '';
-          ws = new WebSocket(`${proto}://${location.host}/${query}`);
+          const query = new URLSearchParams();
+          if (key) query.set('k', key);
+          if (preview) query.set('preview', '1');
+          const qs = query.toString();
+          ws = new WebSocket(`${proto}://${location.host}/${qs ? `?${qs}` : ''}`);
 
           ws.onopen = () => {
             retry = 0;
@@ -305,7 +432,7 @@
                 mergeSettings(msg.settings);
                 return;
               case 'caption':
-                return onCaption(msg);
+                return preview ? undefined : onCaption(msg);
               case 'captionCleared': {
                 const node = partials.get(msg.userId);
                 if (node && node.isConnected) {
@@ -316,6 +443,7 @@
                 return;
               }
               case 'clear':
+                if (preview) return;
                 stage.innerHTML = '';
                 partials.clear();
                 return;
@@ -346,6 +474,7 @@
           ws.onerror = () => ws.close();
         }
 
+        applySettings();
         connect();
       })();
     </script>

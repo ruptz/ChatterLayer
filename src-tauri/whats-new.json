@@ -1,0 +1,33 @@
+[
+  {
+    "version": "0.5.0",
+    "items": [
+      "Rebuilt from the ground up in Rust. The download is about a sixth of the size, 30 MB instead of 172 MB, and it takes about a fifth of the space once installed.",
+      "Captions arrive sooner. The speech models decode 1.5 to 3 times faster, and with Parakeet the first caption comes about 4 seconds sooner after you press Connect.",
+      "Lighter on your PC while captioning: about 15% less CPU with Parakeet, which leaves more for the game and OBS.",
+      "A new look, matching WidgetCake and JammyLayer. The Monitor and your channels stay in view on the right while the settings scroll on the left.",
+      "The microphone picker shows your mics by name straight away, instead of “Microphone 1” until the mic had been used once.",
+      "Your bot token now lives in Windows Credential Manager. It carries over from 0.4.0 on its own, so there’s nothing to paste again.",
+      "Remote sharing only ever runs a cloudflared that ChatterLayer has checked: a fixed version, verified against its published checksum before it runs."
+    ]
+  },
+  {
+    "version": "0.4.0",
+    "items": [
+      "Caption your own mic. Under Source, pick Discord call, My mic, or Both. My mic alone never signs in to Discord, so nothing leaves your PC.",
+      "Both catches what you say while muted in Discord or off push-to-talk, like reading chat out. Press “This is me” on your own Discord row and you’re only captioned once.",
+      "A new look, matching chatterlayer.com — with light and dark, or Match system, under the cog.",
+      "It recovers on its own: a crashed engine restarts and rejoins the call with the same people on, and a dropped voice connection is rejoined instead of ending the stream.",
+      "Pause captions stays in the call but sends nothing, and clears the overlay at once. Also on the tray menu, and on a hotkey if you turn them on.",
+      "Follow mode: press Follow on someone and the bot moves with them between voice channels in that server.",
+      "The bot stays in the call when a moderator moves it, and you get a notification if captions stop while you’re looking elsewhere.",
+      "Start with the computer, straight into the tray — signed in and waiting, nothing else.",
+      "A setup checklist walks a first run from model to OBS, and gets out of the way once everything is green.",
+      "Invite the bot to a server straight from the Source panel — no URL Generator.",
+      "Server and channel pickers update by themselves when the bot joins a server or a channel changes.",
+      "Output shows whether OBS is connected, and Send test caption puts a line on the overlay so you can size it without being in a call.",
+      "Download the model that suits this PC in one click.",
+      "Report a problem opens a bug report with your version, system and log already filled in — never your token."
+    ]
+  }
+]

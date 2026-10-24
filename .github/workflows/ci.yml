@@ -1,28 +1,28 @@
 name: CI
 
 # Fast checks on every push and pull request. Deliberately does NOT download
-# speech models (up to 2.5 GB) or run Electron — see selftest.js for what is
-# covered without them.
+# speech models (up to 2.5 GB); the tests that need one are marked #[ignore]
+# and run by hand — see src-tauri/src/stt/mod.rs.
 
 on:
   push:
-    branches: [main, master, dev]
+    branches: [main, master, dev, tauri]
   pull_request:
   workflow_dispatch:
 
-# Read-only. Nothing here publishes anything, and this is the repo releases are
-# cut from — release.yml is the only workflow that needs more than this.
+# Read-only. Nothing here publishes anything; release.yml is the only workflow
+# that needs more than this.
 permissions:
   contents: read
 
 jobs:
   lint:
-    name: Lint and type-check
+    name: Lint the window's scripts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
@@ -33,106 +33,50 @@ jobs:
       - name: ESLint
         run: npm run lint
 
-      # tsc --checkJs over the files that opt in with `// @ts-check`. The set
-      # grows as modules are annotated; see jsconfig.json.
-      - name: Type-check
-        run: npm run typecheck
-
   test:
-    name: Self test (${{ matrix.os }})
+    name: Rust tests and build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
+      # Nobody here runs macOS or Linux, so this is where a break on either
+      # shows up first. One failing must not hide the others.
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
-
+        os: [windows-latest, macos-latest, ubuntu-22.04]
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - uses: dtolnay/rust-toolchain@stable
 
-      - name: Run self test
-        run: npm run selftest
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
-      - name: Verify the icon generator still produces a valid PNG
+      - name: Linux build libraries
+        if: runner.os == 'Linux'
         run: |
-          node scripts/make-icon.js
-          node -e "const b=require('fs').readFileSync('build/icon.png'); if (b.slice(0,8).toString('hex') !== '89504e470d0a1a0a') { throw new Error('not a PNG'); } console.log('icon ok', b.readUInt32BE(16) + 'x' + b.readUInt32BE(20));"
-
-  package:
-    name: Packaging smoke test
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libdbus-1-dev pkg-config cmake
 
       - run: npm ci
 
-      # The libvosk runtime is bundled into the build, so it must be fetched
-      # before electron-builder runs. Models are NOT fetched — the app
-      # downloads those itself on first run.
-      - name: Fetch Vosk runtime
-        run: npm run setup -- --runtime-only
+      # Bundled into the build, so a missing or swapped runtime fails here
+      # rather than when someone picks a model.
+      - name: Fetch the speech runtimes
+        run: node scripts/fetch-runtimes.js
 
-      - name: Generate icon
-        run: npm run icon
+      - name: Test
+        working-directory: src-tauri
+        run: cargo test --lib
 
-      # --dir produces an unpacked build: fast, and enough to catch a broken
-      # electron-builder config without waiting on installer compression.
-      - name: Build (unpacked)
-        run: npm run pack
-
-      - name: Check libvosk was bundled into resources
-        shell: bash
-        run: |
-          set -e
-          found=$(find dist -name "libvosk.dll" | head -1)
-          if [ -z "$found" ]; then
-            echo "::error::libvosk.dll is missing from the packaged output"
-            exit 1
-          fi
-          echo "bundled: $found"
-
-      # The Whisper, Moonshine and Parakeet engines all run on ONNX Runtime. Its
-      # binding loads onnxruntime.dll as an ordinary shared-library dependency, so
-      # both files have to be unpacked from the asar and sitting next to each
-      # other — a miss here fails when a user picks one of those models, not at
-      # build time.
-      - name: Check ONNX Runtime was unpacked next to its binding
-        shell: bash
-        run: |
-          set -e
-          binding=$(find dist -name "onnxruntime_binding.node" | head -1)
-          if [ -z "$binding" ]; then
-            echo "::error::onnxruntime_binding.node is missing from the packaged output"
-            exit 1
-          fi
-          if [ ! -f "$(dirname "$binding")/onnxruntime.dll" ]; then
-            echo "::error::onnxruntime.dll is not beside the binding at $(dirname "$binding")"
-            exit 1
-          fi
-          echo "bundled: $binding"
-
-          # Only the platform being built should ship. Catching this keeps ~200 MB
-          # of other platforms' libraries out of the installer.
-          for other in darwin linux; do
-            if find dist -path "*napi-v6/$other/*" -name "*onnxruntime*" | grep -q .; then
-              echo "::error::$other ONNX Runtime binaries leaked into a Windows build"
-              exit 1
-            fi
-          done
-          if find dist -name "DirectML.dll" | grep -q .; then
-            echo "::error::DirectML.dll was bundled; ChatterLayer only uses the CPU provider"
-            exit 1
-          fi
-          echo "no foreign or GPU ONNX binaries bundled"
+      # No installer, just the app: fast, and enough to catch a broken Tauri
+      # config or a resource path that no longer exists.
+      - name: Build
+        run: npm run build -- --no-bundle

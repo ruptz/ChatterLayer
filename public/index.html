@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost; frame-src http://127.0.0.1:* http://localhost:*"
+    />
+    <title>ChatterLayer</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- The window has no system frame; this bar is the frame. -->
+    <header class="titlebar" data-tauri-drag-region>
+      <div class="brand" data-tauri-drag-region>
+        <img src="logo.png" alt="" width="26" height="26" data-tauri-drag-region />
+        <span class="wordmark" data-tauri-drag-region>CHATTERLAYER</span>
+      </div>
+      <span class="suite" data-tauri-drag-region>Voice captions for OBS</span>
+
+      <!-- The tally: Standby, Connecting, On air, Fault. -->
+      <p class="status" id="tally" data-state="standby" data-tauri-drag-region>
+        <i class="dot" aria-hidden="true"></i><span id="status-text">Standby</span>
+      </p>
+
+      <!-- The version, lit when a newer release is out. -->
+      <button type="button" class="build" id="build" data-state="current">
+        <span class="mark" aria-hidden="true"></span>
+        <span id="build-version">&mdash;</span>
+      </button>
+
+      <!-- About ChatterLayer itself rather than what goes on stream. -->
+      <div class="settings">
+        <button
+          type="button"
+          class="titlebar__btn"
+          id="settings-toggle"
+          aria-expanded="false"
+          aria-controls="settings-panel"
+          aria-label="App settings"
+          title="App settings"
+        >
+          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+            <circle cx="8" cy="8" r="4.8" />
+            <circle cx="8" cy="8" r="1.9" />
+            <path
+              d="M8 3.1V1.7M8 12.9v1.4M12.9 8h1.4M3.1 8H1.7M11.46 4.54l.99-.99M4.54 11.46l-.99.99M11.46 11.46l.99.99M4.54 4.54l-.99-.99"
+            />
+          </svg>
+        </button>
+
+        <div class="settings-panel" id="settings-panel" hidden>
+          <div class="strip"><span>App settings</span></div>
+          <div class="settings-panel__body">
+            <span class="label">Appearance</span>
+            <div class="seg" id="theme" role="radiogroup" aria-label="Appearance">
+              <label><input type="radio" name="theme" value="system" />Match system</label>
+              <label><input type="radio" name="theme" value="light" />Light</label>
+              <label><input type="radio" name="theme" value="dark" />Dark</label>
+            </div>
+
+            <label class="check">
+              <input type="checkbox" id="close-to-tray" />
+              Keep running in the tray when closed
+            </label>
+            <p class="help">
+              Closing the window hides it instead of ending the call, so a stray
+              click can&rsquo;t cut your captions mid-stream. Quit on the tray icon
+              always quits.
+            </p>
+
+            <div id="login-row">
+              <label class="check">
+                <input type="checkbox" id="launch-at-login" />
+                Start with the computer, in the tray
+              </label>
+              <p class="help">
+                Signs in to Discord and waits. Nobody is captioned and nothing is
+                shared until you press Connect.
+              </p>
+            </div>
+
+            <label class="check">
+              <input type="checkbox" id="hotkeys-enabled" />
+              Global hotkeys
+            </label>
+            <p class="help" id="hotkeys-hint">
+              Work while a game has focus. They take those keys from every other app.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="window-controls">
+        <button type="button" id="win-min" aria-label="Minimise" title="Minimise">
+          <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true"><path d="M0 5.5h10" /></svg>
+        </button>
+        <button type="button" id="win-max" aria-label="Maximise" title="Maximise">
+          <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" /></svg>
+        </button>
+        <button type="button" id="win-close" class="close" aria-label="Close" title="Close">
+          <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" /></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="toolbar">
+      <nav class="tabs" aria-label="Sections">
+        <a href="#source-card">
+          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+            <rect x="5.5" y="1.8" width="5" height="8" rx="2.5" /><path d="M3.3 7.8a4.7 4.7 0 0 0 9.4 0M8 12.5v2" />
+          </svg>
+          Source
+        </a>
+        <a href="#sec-output">
+          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+            <rect x="1.8" y="3" width="12.4" height="8.5" rx="1" /><path d="M4.5 13.8h7M4.3 8.4h4.6M4.3 6h7" />
+          </svg>
+          Output
+        </a>
+        <a href="#sec-style">
+          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+            <path d="M3 13.2 6.6 3h2.8L13 13.2M4.6 9.2h6.8" />
+          </svg>
+          Style
+        </a>
+        <a href="#sec-share">
+          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+            <circle cx="4" cy="8" r="1.9" /><circle cx="12" cy="3.8" r="1.9" /><circle cx="12" cy="12.2" r="1.9" /><path d="M5.7 7.1 10.3 4.7M5.7 8.9l4.6 2.4" />
+          </svg>
+          Sharing
+        </a>
+        <a href="#sec-filter">
+          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+            <path d="M8 1.8 13.2 3.8v4c0 3.1-2.2 5.3-5.2 6.4-3-1.1-5.2-3.3-5.2-6.4v-4z" /><path d="M5.8 8.3h4.4" />
+          </svg>
+          Filter
+        </a>
+        <a href="#sec-log">
+          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+            <path d="M3 3.5h10M3 6.5h10M3 9.5h7M3 12.5h5" />
+          </svg>
+          Log
+        </a>
+      </nav>
+
+      <!-- Only while connected. Stays in the call and sends nothing. -->
+      <button
+        type="button"
+        class="btn"
+        id="pause"
+        title="Stay in the call but send nothing to the stream. The overlay is cleared at once."
+        hidden
+      >
+        Pause captions
+      </button>
+      <button type="button" class="btn btn-danger" id="stop" disabled>Disconnect</button>
+      <button type="button" class="btn btn-primary" id="start">Connect</button>
+    </div>
+
+    <div class="workspace">
+      <main class="scroller" id="scroller">
+        <!-- Once per update, decided in the app. Never on a timer. -->
+        <section class="cell cell--news" id="whats-new" hidden>
+          <div class="strip">
+            <span>What&rsquo;s new</span>
+            <button type="button" class="link" id="whats-new-close">Got it</button>
+          </div>
+          <div class="body">
+            <h2 class="cell__title" id="whats-new-title">What&rsquo;s new</h2>
+            <div id="whats-new-body"></div>
+            <div class="actions">
+              <button type="button" class="linky" id="whats-new-notes">Full release notes</button>
+              <span class="spacer"></span>
+              <span class="help">Free, and it always will be. If it&rsquo;s earned a place on your stream:</span>
+              <button type="button" class="btn btn-sm" id="whats-new-kofi" title="Opens ko-fi.com in your browser">
+                Buy me a coffee
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- The first run, drawn as the signal path it is: every lamp has to
+             light before a word reaches the stream. Gone for good once they all
+             have. -->
+        <section class="cell" id="setup" hidden>
+          <div class="strip">
+            <span>Setup</span>
+            <span class="tag" id="setup-meta">0 of 5</span>
+          </div>
+          <div class="body">
+            <h2 class="cell__title">Getting to your first caption</h2>
+            <ol class="path" id="setup-path">
+              <li data-step="model"><span class="lamp"></span><span>Speech model</span></li>
+              <li data-step="token" data-discord><span class="lamp"></span><span>Bot signed in</span></li>
+              <li data-step="server" data-discord><span class="lamp"></span><span>Bot in a server</span></li>
+              <li data-step="channel" data-discord><span class="lamp"></span><span>Voice channel</span></li>
+              <li data-step="obs"><span class="lamp"></span><span>OBS connected</span></li>
+            </ol>
+            <div class="actions">
+              <p class="help" id="setup-hint"></p>
+              <button type="button" class="btn btn-sm btn-primary" id="setup-action" hidden></button>
+              <span class="spacer"></span>
+              <button type="button" class="btn btn-ghost btn-sm" id="setup-hide">Hide</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="cell" id="source-card">
+          <div class="strip">
+            <span>Source</span>
+            <span class="strip__meta" id="model-path">Checking model&hellip;</span>
+          </div>
+          <div class="body">
+            <h2 class="cell__title">What gets captioned</h2>
+
+            <!-- A Discord call, this PC's own mic, or both. Mic alone never
+                 signs in to Discord — nothing leaves the PC. -->
+            <div class="field">
+              <span class="label" id="source-label">Listen to</span>
+              <div class="seg" id="source" role="radiogroup" aria-labelledby="source-label">
+                <label><input type="radio" name="source" value="discord" />Discord call</label>
+                <label><input type="radio" name="source" value="mic" />My mic</label>
+                <label><input type="radio" name="source" value="both" />Both</label>
+              </div>
+              <p class="help" id="source-note"></p>
+            </div>
+
+            <div class="field" id="mic-field" hidden>
+              <label class="label" for="mic-device">Microphone</label>
+              <select id="mic-device"></select>
+              <!-- What counts as talking, and how long a pause ends the line.
+                   Both apply live, mid-stream. -->
+              <div class="pair">
+                <div class="fader">
+                  <label class="label" for="mic-sensitivity">Sensitivity <em id="v-sensitivity">5</em></label>
+                  <input type="range" id="mic-sensitivity" min="1" max="10" step="1" />
+                </div>
+                <div class="fader">
+                  <label class="label" for="mic-hang">Pause ends line <em id="v-hang">0.7s</em></label>
+                  <input type="range" id="mic-hang" min="300" max="2000" step="100" />
+                </div>
+              </div>
+              <p class="help" id="mic-note">
+                Keyboard or game audio setting captions off? Lower the
+                sensitivity. Quiet words going missing? Raise it.
+              </p>
+            </div>
+
+            <div class="field" data-discord>
+              <label class="label" for="token">Discord bot token</label>
+              <div class="input-row">
+                <input type="password" id="token" placeholder="Paste the bot token" autocomplete="off" spellcheck="false" />
+                <button type="button" class="btn btn-sm" id="toggle-token">Show</button>
+              </div>
+              <p class="help" id="token-hint">Encrypted by your OS keystore.</p>
+              <button type="button" class="linky" id="bot-guide" title="Opens chatterlayer.com in your browser">
+                How do I make a bot?
+              </button>
+            </div>
+
+            <div class="field" data-discord>
+              <label class="label" for="guild">Server</label>
+              <div class="input-row">
+                <select id="guild"></select>
+                <!-- Becomes "Refresh" once signed in; renderAuth() owns it. -->
+                <button type="button" class="btn btn-sm" id="refresh-guilds">Sign in</button>
+              </div>
+              <p class="help" id="auth-note">Signing in&hellip;</p>
+              <button
+                type="button"
+                class="linky"
+                id="invite-bot"
+                title="Opens Discord in your browser, with View Channel and Connect already ticked"
+                hidden
+              >
+                Invite the bot to another server
+              </button>
+            </div>
+
+            <div class="field" data-discord>
+              <label class="label" for="voice-channel">Voice channel</label>
+              <select id="voice-channel"></select>
+              <p class="help" id="channel-note">Only channels your bot can join are selectable.</p>
+              <button type="button" class="linky" id="toggle-manual">Enter a channel ID manually</button>
+            </div>
+
+            <div class="field manual" id="manual-channel" data-discord hidden>
+              <label class="label" for="channel">Voice channel ID</label>
+              <input
+                type="text"
+                id="channel"
+                placeholder="Right-click the channel, then Copy Channel ID"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <p class="help">Needs Developer Mode in Discord. Overrides the pickers above.</p>
+            </div>
+
+            <div class="field">
+              <label class="label" for="model">Speech model</label>
+              <div class="input-row">
+                <select id="model"></select>
+                <button type="button" class="btn btn-sm" id="manage-models">Get models</button>
+              </div>
+              <p class="help" id="model-note">More accurate models use more memory and CPU.</p>
+            </div>
+
+            <ul class="models" id="model-list" hidden></ul>
+          </div>
+        </section>
+
+        <section class="cell" id="sec-output">
+          <div class="strip">
+            <span>Output</span>
+            <span class="tag" id="obs-meta" data-on="0">OBS not connected</span>
+          </div>
+          <div class="body">
+            <h2 class="cell__title">Add it to OBS</h2>
+            <p class="cell__note">One URL, pasted into an OBS <em>Browser</em> source. The page is already transparent.</p>
+
+            <div class="url">
+              <code id="url-overlay">&mdash;</code>
+              <button type="button" class="btn btn-primary" data-copy="url-overlay">Copy</button>
+            </div>
+
+            <div class="faders">
+              <div class="fader">
+                <label class="label" for="font-size">Text size <em id="v-font">30</em></label>
+                <input type="range" id="font-size" min="14" max="64" step="1" />
+              </div>
+              <div class="fader">
+                <label class="label" for="lifetime">Hold <em id="v-life">7.0s</em></label>
+                <input type="range" id="lifetime" min="2000" max="20000" step="500" />
+              </div>
+              <div class="fader">
+                <label class="label" for="max-lines">Max lines <em id="v-lines">4</em></label>
+                <input type="range" id="max-lines" min="1" max="8" step="1" />
+              </div>
+            </div>
+
+            <div class="checks">
+              <label class="check"><input type="checkbox" id="show-partials" />Live partial text</label>
+              <label class="check"><input type="checkbox" id="show-names" />Speaker names</label>
+            </div>
+
+            <div class="actions">
+              <button
+                type="button"
+                class="btn btn-sm"
+                id="test-caption"
+                title="Puts a line on the overlay the same way speech does, so you can size the source in OBS without being in a call."
+              >
+                Send test caption
+              </button>
+              <button type="button" class="btn btn-sm" id="clear">Clear captions</button>
+            </div>
+
+            <div class="field field--row">
+              <div>
+                <label class="label" for="port">Port</label>
+                <p class="help">Change it if something else already uses 8777.</p>
+              </div>
+              <input type="number" id="port" min="1024" max="65535" class="narrow" />
+            </div>
+
+            <div class="field field--row">
+              <div>
+                <label class="check" for="check-updates">
+                  <input type="checkbox" id="check-updates" />
+                  Check for updates
+                </label>
+                <p class="help">
+                  Asks GitHub at launch whether a newer release exists. Nothing is
+                  downloaded. The only request ChatterLayer makes on its own.
+                </p>
+              </div>
+              <button type="button" class="btn btn-sm btn-ghost" id="reveal">Show config file</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="cell" id="sec-style">
+          <div class="strip">
+            <span>Caption style</span>
+            <span class="strip__meta">Live in OBS as you change it</span>
+          </div>
+          <div class="body">
+            <h2 class="cell__title">How captions look on stream</h2>
+
+            <div class="stage-preview" aria-label="Overlay preview">
+              <iframe id="style-preview" title="Overlay preview" tabindex="-1"></iframe>
+            </div>
+
+            <div class="field">
+              <span class="label" id="look-label">Look</span>
+              <div class="seg" id="look" role="radiogroup" aria-labelledby="look-label">
+                <label><input type="radio" name="look" value="card" />Card</label>
+                <label><input type="radio" name="look" value="box" />Subtitle box</label>
+                <label><input type="radio" name="look" value="text" />Text only</label>
+              </div>
+            </div>
+
+            <div class="pair">
+              <div class="field">
+                <span class="label" id="position-label">Position</span>
+                <div class="seg" id="position" role="radiogroup" aria-labelledby="position-label">
+                  <label><input type="radio" name="position" value="bottom" />Bottom</label>
+                  <label><input type="radio" name="position" value="top" />Top</label>
+                </div>
+              </div>
+              <div class="field">
+                <span class="label" id="align-label">Alignment</span>
+                <div class="seg" id="align" role="radiogroup" aria-labelledby="align-label">
+                  <label><input type="radio" name="align" value="left" />Left</label>
+                  <label><input type="radio" name="align" value="center" />Centre</label>
+                  <label><input type="radio" name="align" value="right" />Right</label>
+                </div>
+              </div>
+            </div>
+
+            <div class="faders">
+              <div class="fader">
+                <label class="label" for="style-bg">Background <em id="v-bg">72%</em></label>
+                <input type="range" id="style-bg" min="0" max="100" step="1" />
+              </div>
+              <div class="fader">
+                <label class="label" for="style-width">Max width <em id="v-width">92%</em></label>
+                <input type="range" id="style-width" min="30" max="100" step="1" />
+              </div>
+              <div class="fader">
+                <label class="label" for="style-outline">Outline <em id="v-outline">Off</em></label>
+                <input type="range" id="style-outline" min="0" max="8" step="0.5" />
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="label" for="style-font">Font</label>
+              <div class="input-row">
+                <input type="text" id="style-font" list="style-fonts" spellcheck="false" placeholder="Default (Segoe UI)" />
+                <datalist id="style-fonts"></datalist>
+                <input type="color" id="style-color" title="Text colour" aria-label="Text colour" />
+                <button type="button" class="btn" id="fonts-folder">Fonts folder</button>
+              </div>
+              <p class="help">
+                Type the name of any font installed on this PC. Fonts that aren&rsquo;t
+                installed, or that co-streamers don&rsquo;t have, go in the fonts folder
+                (.ttf, .otf, .woff, .woff2). The overlay serves them itself, and each
+                one&rsquo;s name is its file name without the extension.
+              </p>
+            </div>
+
+            <details class="field custom-css">
+              <summary class="label">Custom CSS</summary>
+              <textarea id="style-css" rows="8" spellcheck="false" placeholder=".caption { border-radius: 0; }"></textarea>
+              <p class="help">
+                Applied after everything above, so it wins. Each line is a
+                <code>.caption</code> holding <code>.speaker</code> and <code>.text</code>;
+                <code>.caption.partial</code> is text still being spoken, and
+                <code>.caption[data-user="&lt;Discord ID&gt;"]</code> picks out one person.
+                <code>--color</code> is the speaker&rsquo;s colour. Web fonts load with
+                <code>@import</code>, but only while OBS is online. A co-streamer can drop
+                yours by adding <code>&amp;css=0</code> to their link.
+              </p>
+              <div class="actions">
+                <button type="button" class="btn btn-sm btn-ghost" id="style-reset">Reset style</button>
+              </div>
+            </details>
+          </div>
+        </section>
+
+        <section class="cell" id="sec-share">
+          <div class="strip">
+            <span>Remote overlay</span>
+            <span class="tag" id="share-meta">Off</span>
+          </div>
+          <div class="body">
+            <h2 class="cell__title">Share with co-streamers</h2>
+            <p class="cell__note">
+              Opens a Cloudflare tunnel so everyone co-streaming can point OBS at one
+              link, instead of each running their own bot and speech model. Nothing
+              leaves this PC until you press Start, and the tunnel is always closed
+              again when ChatterLayer starts.
+            </p>
+
+            <label class="check check--lead">
+              <input type="checkbox" id="share-enabled" />
+              Let other streamers use these captions
+            </label>
+
+            <div id="share-panel" hidden>
+              <div class="actions">
+                <button type="button" class="btn btn-primary" id="share-start">Start tunnel</button>
+                <button type="button" class="btn btn-danger" id="share-stop" disabled>Stop tunnel</button>
+                <span class="spacer"></span>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm"
+                  id="share-rotate"
+                  title="Mints a new access key and disconnects anyone using the old link."
+                >
+                  New access key
+                </button>
+              </div>
+
+              <span class="label label--gap">Link to share</span>
+              <div class="url">
+                <code id="url-share">&mdash;</code>
+                <button type="button" class="btn" data-copy="url-share">Copy</button>
+              </div>
+
+              <p class="help" id="share-note">
+                The link carries an access key. Without it the page returns 401, so a
+                guessed tunnel address gets nothing.
+              </p>
+              <p class="help">
+                Each streamer can size the overlay for their own scene by adding
+                <code>&amp;size=42</code>, <code>&amp;hold=5</code> (seconds),
+                <code>&amp;lines=2</code>, <code>&amp;partials=0</code>,
+                <code>&amp;names=0</code>, <code>&amp;pos=top</code> or
+                <code>&amp;align=center</code> to their copy of the link. Those beat the
+                settings in Output and Style for that one browser source only.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section class="cell" id="sec-filter">
+          <div class="strip">
+            <span>Word filter</span>
+            <span class="strip__meta" id="filter-count">0 masked</span>
+          </div>
+          <div class="body">
+            <h2 class="cell__title">Keep slurs off the stream</h2>
+            <p class="cell__note">
+              Racial and ethnic slurs are replaced with <code>*****</code> in both
+              speech and speaker names. Whole words only, so ordinary speech
+              isn&rsquo;t mangled.
+            </p>
+
+            <label class="check check--lead">
+              <input type="checkbox" id="filter-enabled" />
+              Mask slurs before they reach the stream
+            </label>
+
+            <div class="field">
+              <label class="label" for="filter-custom">Also mask these</label>
+              <textarea id="filter-custom" rows="3" spellcheck="false" placeholder="One word or phrase per line"></textarea>
+              <p class="help">Saved as you type. Plurals are matched automatically.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="cell" id="sec-log">
+          <div class="strip">
+            <span>Log</span>
+            <span class="strip__actions">
+              <button
+                type="button"
+                class="link"
+                id="report"
+                title="Opens a bug report on GitHub with your version, system and this log filled in. Your token is never included, and nothing is sent until you submit it."
+              >
+                Report a problem
+              </button>
+              <button type="button" class="link" id="clear-log">Clear</button>
+            </span>
+          </div>
+          <pre class="log" id="log"></pre>
+        </section>
+      </main>
+
+      <!-- The live desk, always in view: what's going out, and who's on. -->
+      <aside class="stage">
+        <div class="strip">
+          <span>Monitor</span>
+          <span class="strip__meta" id="stats">&mdash;</span>
+        </div>
+        <!-- What the OBS overlay is showing right now, scaled down. Captions
+             leave here when they leave the stream, so it isn't a transcript. -->
+        <div class="monitor" id="preview">
+          <p class="empty">Captions appear here as people speak.</p>
+        </div>
+
+        <div class="strip">
+          <span>Channels</span>
+          <span class="tag" id="speaker-count">0 on</span>
+        </div>
+        <p class="stage__note">
+          Only channels switched on are transcribed, and you can switch anyone mid-call.
+          Click a name to change how it reads on captions.
+        </p>
+        <ul class="rows" id="members">
+          <li class="empty">Connect to see who&rsquo;s in the voice channel.</li>
+        </ul>
+      </aside>
+    </div>
+
+    <footer class="statusbar">
+      <span>ChatterLayer &middot; Runs on this PC</span>
+      <nav class="statusbar__links">
+        <button type="button" class="link" id="donate" title="Opens ko-fi.com in your browser">Ko-fi &#8599;</button>
+      </nav>
+    </footer>
+
+    <script src="bridge.js"></script>
+    <script src="chrome.js"></script>
+    <script src="renderer.js"></script>
+  </body>
+</html>
