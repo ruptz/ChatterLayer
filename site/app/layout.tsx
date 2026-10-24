@@ -65,6 +65,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to content
         </a>
         {children}
+        {/* Cloudflare Web Analytics, cookie-free. Installed by hand because the
+            DNS records are DNS-only, so Cloudflare never sees the traffic to
+            inject it. */}
+        <script
+          type="module"
+          src="https://static.cloudflareinsights.com/beacon.min.js"
+          data-cf-beacon='{"token": "1c3a41dfa30548a5b84d5a3bd871e809"}'
+        />
       </body>
     </html>
   );
