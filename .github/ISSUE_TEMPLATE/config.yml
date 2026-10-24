@@ -5,7 +5,7 @@ blank_issues_enabled: false
 
 contact_links:
   - name: Setup help, or a question
-    url: https://github.com/ruptz/ChatterLayer/discussions/new?category=help
+    url: https://github.com/ruptz/ChatterLayer/discussions/new?category=q-a
     about: Bot not joining, empty server list, blank overlay in OBS — ask here and it gets answered in the open, where the next person can find it.
 
   - name: Troubleshooting guide

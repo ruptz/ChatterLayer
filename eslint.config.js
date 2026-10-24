@@ -38,21 +38,14 @@ const nodeRules = {
 };
 
 module.exports = [
-  { ignores: ['node_modules/', 'dist/', 'vendor/', 'models/', 'build/', 'site/'] },
+  { ignores: ['node_modules/', 'dist/', 'vendor/', 'models/', 'build/', 'site/', 'src-tauri/'] },
   nodeRules,
   {
-    // The renderer and the OBS overlay run in a browser, not Node.
-    files: ['src/renderer/**/*.js'],
+    // The window's scripts run in a browser, not Node.
+    files: ['public/**/*.js'],
     languageOptions: {
       sourceType: 'script',
       globals: { ...globals.browser },
-    },
-  },
-  {
-    // stt-worker.js runs as a worker thread: Node globals plus worker ones.
-    files: ['src/engine/stt-worker.js'],
-    languageOptions: {
-      globals: { ...globals.node, ...globals.worker },
     },
   },
   prettier,

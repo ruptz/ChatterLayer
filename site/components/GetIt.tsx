@@ -14,7 +14,7 @@ export function GetIt() {
       index="07"
       id="download"
       name="Get it"
-      lede="An installer, or a portable build if you'd rather not install anything."
+      lede="An installer, or a zip if you'd rather not install anything."
     >
       <div className="grid gap-x-8 gap-y-12 lg:grid-cols-2">
         <div>

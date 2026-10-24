@@ -1,15 +1,25 @@
 name: Release
 
-# Builds installers for every platform and attaches them to a GitHub Release.
+# Builds ChatterLayer for Windows, macOS and Linux and attaches everything to a
+# draft GitHub Release.
 #
 # To cut a release:
-#   1. bump "version" in package.json
-#   2. git tag v1.0.1 && git push origin v1.0.1
+#   1. bump the version in package.json, src-tauri/Cargo.toml and
+#      src-tauri/tauri.conf.json, and give it an entry in
+#      src-tauri/whats-new.json
+#   2. git tag v0.5.1 && git push origin v0.5.1
 #
 # Running it manually from the Actions tab:
 #   - with a tag  -> builds and publishes a draft release for that tag
 #   - no tag      -> builds artifacts only; the release job is skipped, because
 #                    a release cannot be created without a tag to attach to
+#
+# Windows is the platform it's tested on. The macOS and Linux builds are built
+# the same way from the same code and shipped for people to try and report on.
+#
+# Every platform also gets ChatterLayer-<version>-<platform>.zip: the app on its
+# own, which the WidgetCake launcher installs. Windows keeps the name
+# ChatterLayer-<version>-win.zip that the launcher has always looked for.
 
 on:
   push:
@@ -18,117 +28,179 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        # A release needs a tag to attach to. Running this manually from a
-        # branch with no tag produces build artifacts only — it cannot create a
-        # release, because there is nothing to name it after.
-        description: 'Tag to publish (e.g. v1.0.1). Leave blank to build artifacts only.'
+        description: 'Tag to publish (e.g. v0.5.1). Leave blank to build artifacts only.'
         required: false
         type: string
 
+# Read-only by default. Building compiles every dependency, and there's no
+# reason for that to hold a token that can write to the repository.
 permissions:
-  contents: write # required to create the release and upload assets
+  contents: read
 
 jobs:
+  # The installers take their version from the project files, not the tag, and
+  # the update badge compares the two. A tag that disagrees fails here, before
+  # five platforms spend time building.
+  verify:
+    name: Check the tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches the project version
+        if: github.ref_type == 'tag' || inputs.tag
+        run: |
+          TAG="${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}"
+          pkg=$(node -p "require('./package.json').version")
+          conf=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          cargo=$(grep -m1 '^version' src-tauri/Cargo.toml | cut -d'"' -f2)
+          for v in "$pkg" "$conf" "$cargo"; do
+            if [ "$TAG" != "v$v" ]; then
+              echo "::error::Tag $TAG does not match package.json ($pkg), tauri.conf.json ($conf) and Cargo.toml ($cargo). Bump the version, then tag."
+              exit 1
+            fi
+          done
+          echo "$TAG matches"
+
   build:
     name: Build ${{ matrix.name }}
+    needs: verify
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
       id-token: write # actions/attest-build-provenance
       attestations: write
     strategy:
+      # Windows is the tested platform. A failure on another must not stop it
+      # shipping.
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
-            name: Windows
-            script: dist:win
-            attest: dist/*.exe
-            artifacts: |
-              dist/*.exe
-              dist/*.exe.blockmap
-              dist/latest.yml
-          - os: macos-latest
-            name: macOS
-            script: dist:mac
-            attest: dist/*.dmg
-            artifacts: |
-              dist/*.dmg
-              dist/*.dmg.blockmap
-              dist/latest-mac.yml
-          - os: ubuntu-latest
-            name: Linux
-            script: dist:linux
-            attest: |
-              dist/*.AppImage
-              dist/*.deb
-            artifacts: |
-              dist/*.AppImage
-              dist/*.deb
-              dist/latest-linux.yml
+          - name: Windows
+            os: windows-latest
+            platform: win
+            runtimes: win32-x64
+            bundles: nsis
+          - name: macOS (Apple Silicon)
+            os: macos-latest
+            platform: macos-arm64
+            runtimes: darwin-arm64
+            target: aarch64-apple-darwin
+            bundles: app,dmg
+          - name: macOS (Intel)
+            os: macos-latest
+            platform: macos-x64
+            runtimes: darwin-x64
+            target: x86_64-apple-darwin
+            bundles: app,dmg
+          - name: Linux (x64)
+            os: ubuntu-22.04
+            platform: linux-x64
+            runtimes: linux-x64
+            bundles: appimage,deb
+          - name: Linux (ARM64)
+            os: ubuntu-22.04-arm
+            platform: linux-arm64
+            runtimes: linux-arm64
+            bundles: appimage,deb
+
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
-      # The update badge compares the running app's version with the newest tag.
-      # v0.0.1–v0.0.5 were built with package.json still at 1.0.0, so anyone on
-      # those never sees an update. A tag that doesn't match package.json fails
-      # here, before anything is built.
-      - name: Check the tag matches package.json
-        if: github.ref_type == 'tag' || inputs.tag
-        shell: bash
-        run: |
-          TAG="${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}"
-          VERSION="v$(node -p "require('./package.json').version")"
-          if [ "$TAG" != "$VERSION" ]; then
-            echo "::error::Tag $TAG does not match package.json ($VERSION). Bump the version, then tag."
-            exit 1
-          fi
-          echo "Tag $TAG matches package.json"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.platform }}
+
+      # The web view and tray library Tauri builds against, and D-Bus for the
+      # keystore the bot token goes in.
+      - name: Linux build libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libdbus-1-dev pkg-config cmake
+
+      # The Tauri command-line tools; the window itself has no npm packages.
       - name: Install dependencies
         run: npm ci
 
-      - name: Run self test
-        run: npm run selftest
+      # libvosk and ONNX Runtime ship inside every build. Speech models do NOT:
+      # they're 40 MB to 2.5 GB and the app downloads the one picked.
+      - name: Fetch the speech runtimes
+        run: node scripts/fetch-runtimes.js ${{ matrix.runtimes }}
 
-      # Speech models are NOT bundled — they are 40 MB to 2.5 GB and the app
-      # downloads the one the user picks on first run. Only the libvosk
-      # runtime ships inside the installer.
-      - name: Fetch Vosk runtime for this platform
-        run: npm run setup -- --runtime-only
+      # Not on the cross-compiled Intel Mac build, whose tests can't run on an
+      # Apple Silicon runner as the target they were built for.
+      - name: Test
+        if: matrix.target == '' || matrix.target == 'aarch64-apple-darwin'
+        working-directory: src-tauri
+        run: cargo test --release --lib
 
-      - name: Generate icon
-        run: npm run icon
+      - name: Build
+        run: npm run build -- --bundles ${{ matrix.bundles }} ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
 
-      - name: Build installers
-        # --publish never: assets are collected and released in the job below,
-        # so all platforms land in a single release.
-        run: npm run ${{ matrix.script }} -- --publish never
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Unsigned builds. Add CSC_LINK / CSC_KEY_PASSWORD (Windows) or
-          # macOS signing secrets here when certificates are available.
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+      # The installer under a stable name, and the app on its own for
+      # WidgetCake, with the runtimes where the app looks for them.
+      - name: Name the installers and zip the app
+        run: |
+          version=$(node -p "require('./package.json').version")
+          base="ChatterLayer-$version"
+          release="src-tauri/target/${{ matrix.target }}/release"
+          release="${release//\/\//\/}"
+          bundle="$release/bundle"
+          mkdir -p out
+
+          case "${{ matrix.platform }}" in
+            win)
+              cp "$bundle"/nsis/*-setup.exe "out/$base-Setup.exe"
+              mkdir -p app/vosk app/onnxruntime
+              cp "$release/chatterlayer.exe" app/ChatterLayer.exe
+              cp vendor/runtime/vosk/* app/vosk/
+              cp vendor/runtime/onnxruntime/* app/onnxruntime/
+              (cd app && pwsh -NoProfile -Command "Compress-Archive -Path * -DestinationPath ../out/$base-win.zip")
+              ;;
+            macos-*)
+              cp "$bundle"/dmg/*.dmg "out/$base-${{ matrix.platform }}.dmg"
+              # ditto keeps the bundle's permissions and structure intact.
+              ditto -c -k --keepParent "$bundle"/macos/*.app "out/$base-${{ matrix.platform }}.zip"
+              ;;
+            linux-*)
+              cp "$bundle"/appimage/*.AppImage "out/$base-${{ matrix.platform }}.AppImage"
+              cp "$bundle"/deb/*.deb "out/$base-${{ matrix.platform }}.deb"
+              mkdir -p app/vosk app/onnxruntime
+              cp "$release/chatterlayer" app/ChatterLayer
+              cp vendor/runtime/vosk/* app/vosk/
+              cp vendor/runtime/onnxruntime/* app/onnxruntime/
+              (cd app && zip -r -y "../out/$base-${{ matrix.platform }}.zip" .)
+              ;;
+          esac
+          ls -la out
 
       # Cryptographic provenance: what built this file, from which commit and
-      # workflow. Free and GitHub-native; `gh attestation verify <file>` checks
-      # it. Does not need a signing certificate.
+      # workflow. `gh attestation verify <file>` checks it. Needs no signing
+      # certificate.
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v4
         with:
-          subject-path: ${{ matrix.attest }}
+          subject-path: out/*
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
-          name: chatterlayer-${{ matrix.name }}
-          path: ${{ matrix.artifacts }}
+          name: chatterlayer-${{ matrix.platform }}
+          path: out/*
           if-no-files-found: error
           retention-days: 14
 
@@ -139,9 +211,10 @@ jobs:
     permissions:
       contents: write # create the release and upload assets
       id-token: write # cosign keyless signing via GitHub OIDC
-    # Only run when there is an actual tag to release. On a tag push that's
-    # github.ref_name; on a manual run it's whatever was typed in.
-    if: github.ref_type == 'tag' || inputs.tag
+    # Only when there's a tag to release. Runs even if one platform failed, so
+    # a broken Linux build can't hold up a working Windows one. The release is
+    # a draft: check what's attached before publishing.
+    if: (github.ref_type == 'tag' || inputs.tag) && !cancelled()
 
     steps:
       - uses: actions/checkout@v4
@@ -157,10 +230,11 @@ jobs:
           echo "name=$TAG" >> "$GITHUB_OUTPUT"
           echo "Publishing $TAG"
 
-      - name: Download all build artifacts
-        uses: actions/download-artifact@v8
+      - name: Download the builds
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: chatterlayer-*
           merge-multiple: true
 
       - name: List what will be published
@@ -178,7 +252,7 @@ jobs:
         working-directory: artifacts
         run: |
           find . -maxdepth 1 -type f \
-            \( -name '*.exe' -o -name '*.dmg' -o -name '*.AppImage' -o -name '*.deb' \) \
+            \( -name '*.exe' -o -name '*.zip' -o -name '*.dmg' -o -name '*.AppImage' -o -name '*.deb' \) \
             -printf '%P\n' | sort | xargs -r sha256sum | tee SHA256SUMS
 
       - name: Install cosign
@@ -193,13 +267,13 @@ jobs:
 
       # The in-app "What's new" card is the one place release notes are
       # written. A version with no entry gets no section, not an empty one.
-      - name: Read this version's notes from whats-new.js
+      - name: Read this version's notes from whats-new.json
         id: notes
         run: |
           {
             echo 'md<<NOTES_EOF'
             node -e '
-              const { NOTES } = require("./src/main/whats-new");
+              const NOTES = require("./src-tauri/whats-new.json");
               const entry = NOTES.find((n) => n.version === process.argv[1].replace(/^v/, ""));
               if (entry) console.log(["### What’s new", "", ...entry.items.map((i) => `- ${i}`), ""].join("\n"));
             ' "${{ steps.tag.outputs.name }}"
@@ -231,10 +305,21 @@ jobs:
 
             | Platform | File |
             |---|---|
-            | Windows (installer) | `ChatterLayer-*-Setup.exe` |
-            | Windows (portable) | `ChatterLayer-*-portable.exe` |
-            | macOS | `ChatterLayer-*.dmg` |
-            | Linux | `ChatterLayer-*.AppImage` or `.deb` |
+            | Windows | `ChatterLayer-*-Setup.exe`, or `ChatterLayer-*-win.zip` to run without installing |
+            | macOS, Apple Silicon | `ChatterLayer-*-macos-arm64.dmg` |
+            | macOS, Intel | `ChatterLayer-*-macos-x64.dmg` |
+            | Linux | `ChatterLayer-*-linux-x64.AppImage` or `.deb` (also `linux-arm64`) |
+
+            The `.zip` files are what the WidgetCake launcher installs for you.
+
+            Windows is where ChatterLayer is tested. The macOS and Linux builds
+            come from the same code and should work, but haven't been run on
+            those systems by us — if something's wrong, please
+            [open an issue](https://github.com/ruptz/ChatterLayer/issues/new/choose).
+
+            Installing over 0.4 or earlier on Windows removes the old version
+            first. Your settings, bot token and downloaded models carry over.
+            On macOS and Linux, paste your bot token once more.
 
             ### First run
 
@@ -252,31 +337,27 @@ jobs:
             ### About the "unknown developer" warnings
 
             ChatterLayer is free and unfunded, and code-signing certificates
-            cost money each year, so these builds aren't signed. Your OS will
-            say so on first launch. The app is the same one built by this repo's
-            CI — here's what you'll see and how to get past it:
+            cost money each year, so these builds aren't signed. Your system
+            will say so on first launch:
 
-            - **Windows** — SmartScreen shows a blue box. Choose *More info* →
-              *Run anyway*. (It stops warning once enough people have
-              downloaded a given release.)
-            - **macOS** — Gatekeeper may say the app is "damaged". It isn't —
-              that's the quarantine flag on an unsigned app. **ChatterLayer
-              clears it for you:** open it once (right-click → *Open* → *Open*),
-              and it offers a one-click fix so every launch after is normal. Or
-              run `xattr -dr com.apple.quarantine /Applications/ChatterLayer.app`
-              yourself.
+            - **Windows** — SmartScreen shows a blue box. Choose *More info*,
+              then *Run anyway*. It stops once a release has enough downloads.
+            - **macOS** — Gatekeeper may say the app is "damaged". It isn't;
+              that's the quarantine flag every unsigned download gets. Run
+              `xattr -dr com.apple.quarantine /Applications/ChatterLayer.app`
+              once, then open it normally.
             - **Linux** — mark the AppImage executable first:
-              `chmod +x ChatterLayer-*.AppImage`.
+              `chmod +x ChatterLayer-*.AppImage`. The bot token goes in your
+              desktop's keyring (GNOME Keyring or KWallet).
 
             **Verify your download.** Every release ships `SHA256SUMS` (signed
-            with Sigstore) and each installer carries build provenance:
+            with Sigstore) and each file carries build provenance:
 
             ```
             sha256sum -c SHA256SUMS
             gh attestation verify ChatterLayer-*-Setup.exe --repo ruptz/ChatterLayer
             ```
 
-            Or skip the binaries entirely and build from source — four commands,
-            see the README.
+            Or skip the binaries entirely and build from source; see the README.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

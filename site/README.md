@@ -67,19 +67,19 @@ live in `lib/content.ts`.
 
 | On the site | Comes from |
 | --- | --- |
-| `models` table | `src/shared/models.js` (`MODEL_CATALOG`) |
-| `speakers` colours | `src/shared/colors.js` |
-| `latency`, `expectations`, `sampleClip` | `npm run bench` and `npm run test:stt` in the app |
+| `models` table | the app's `src-tauri/models.json` |
+| `speakers` colours | the app's `src-tauri/src/colors.rs` |
+| `latency`, `expectations`, `sampleClip` | the app's README, Performance (measured on 0.4; 0.5 decodes faster) |
 | `setupSteps` | the app's README and the Source, Output and Remote overlay panels |
-| `sharingGuards`, `overlayParams` | `src/main/` and `web/overlay.html` |
+| `sharingGuards`, `overlayParams` | the app's `src-tauri/src/server.rs`, `tunnel.rs` and `web/overlay.html` |
 | `requirements` | the app's README |
 | `site.overlayUrl` | the app's default overlay port |
-| `public/logo.svg`, `public/logo.png` | `build/icon.svg` and `build/icon.png` — straight copies |
+| `public/logo.png` | the app's `src-tauri/icons/app-icon.png`, at 180px |
 
-Nothing here is generated yet. `scripts/sync-from-app.mjs` is the plan —
-see the repo's website checklist — and it needs `MODEL_CATALOG` moved into a
-dependency-free module first, because a Vercel build of `site/` only installs
-this folder's own packages.
+Nothing here is generated yet. `scripts/sync-from-app.mjs` is the plan — see
+the repo's website checklist. The model catalogue is now plain JSON
+(`src-tauri/models.json`), so the site can read it without installing any of
+the app's packages, which a Vercel build of `site/` couldn't.
 
 ## Deploying
 

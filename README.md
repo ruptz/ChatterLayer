@@ -64,8 +64,8 @@ Each person in your call gets their own colour and their own caption line:
 
 | | |
 |---|---|
-| **OS** | Windows, macOS (Intel or Apple Silicon), or Linux |
-| **Disk** | ~350 MB for the app, plus the speech model you choose (40 MB–2.5 GB) |
+| **OS** | Windows 10 or 11 (tested); macOS 11+ or Linux (built from the same code, untested — [report issues](https://github.com/ruptz/ChatterLayer/issues/new/choose)) |
+| **Disk** | ~95 MB for the app, plus the speech model you choose (40 MB–2.5 GB) |
 | **RAM** | ~2.6 GB on Parakeet, the pick for PCs with 16 GB; ~570 MB for a 7-person call on Moonshine Base, the pick for lighter machines |
 | **A Discord bot** | Only to caption a call — not for your mic alone. Free, takes two minutes — [instructions below](#3-create-your-discord-bot) |
 | **OBS** | Any recent version |
@@ -82,18 +82,20 @@ About ten minutes, most of which is waiting for a download.
 ### 1. Install ChatterLayer
 
 Grab the latest build from the
-[Releases page](https://github.com/ruptz/ChatterLayer/releases). There's a normal
-installer and a portable version if you'd rather not install anything.
+[Releases page](https://github.com/ruptz/ChatterLayer/releases). On Windows there's an
+installer, and a zip if you'd rather not install anything: unzip it anywhere and
+run `ChatterLayer.exe`. macOS gets a `.dmg` (Apple Silicon or Intel), Linux an
+AppImage or a `.deb`. Installing over 0.4 or earlier removes the old version
+first, and your settings, token and models carry over.
 
-> **Your OS will warn you on first launch.** The builds aren't code-signed —
+> **Your system will warn you on first launch.** The builds aren't code-signed —
 > certificates cost money this project isn't spending — so:
 >
 > - **Windows:** SmartScreen shows a blue box. Click *More info* → *Run anyway*.
 >   It stops once a release has enough downloads.
-> - **macOS:** Gatekeeper may say the app is "damaged". It isn't. Right-click →
->   *Open* → *Open* once; ChatterLayer then offers a **one-click fix** so later
->   launches are normal. (Manual version:
->   `xattr -dr com.apple.quarantine /Applications/ChatterLayer.app`.)
+> - **macOS:** Gatekeeper may say the app is "damaged". It isn't; run
+>   `xattr -dr com.apple.quarantine /Applications/ChatterLayer.app` once.
+> - **Linux:** `chmod +x` the AppImage first.
 >
 > Every release includes a Sigstore-signed `SHA256SUMS` and per-file build
 > provenance if you want to verify the download — see
@@ -163,8 +165,9 @@ also checks permissions while it's listing, so:
 The **Channels** panel then fills with everyone currently in the call. Nobody is
 captioned until you switch them on.
 
-Your token is saved encrypted using your operating system's own keystore (DPAPI
-on Windows, Keychain on macOS, libsecret on Linux), so you only paste it once —
+Your token is kept in your system's keystore (Credential Manager on Windows,
+Keychain on macOS, GNOME Keyring or KWallet on Linux), never in a plain file, so
+you only paste it once —
 after that ChatterLayer signs in by itself at launch and the dropdowns are ready
 when you open it. Your bot therefore shows as **online in Discord whenever
 ChatterLayer is open**, not only while you're captioning.
@@ -225,8 +228,8 @@ no cloud calls, whichever one you pick.
 ⭐ Recommended — Parakeet on PCs with 16 GB of RAM or more, Moonshine Base on
 lighter machines. The app works out which one suits yours.
 
-Measured on a Ryzen 5 5600X against real speech — reproduce with
-`npm run bench -- --all --wav=yourfile.wav`. See
+Measured on a Ryzen 5 5600X against real speech, on 0.4's engines; 0.5's are
+faster. See
 [Performance](#performance-and-limits) for the method and what the numbers mean.
 
 **Two kinds of engine, and the difference matters.**
@@ -386,8 +389,8 @@ window you're looking at, you get a system notification — and another saying
 
 **Start with the computer, in the tray** (under the cog) launches it at login,
 signed in to Discord and waiting. Nobody is captioned and nothing is shared
-until you press Connect. Windows and macOS only; Linux has no standard way to
-do this.
+until you press Connect. It re-points itself on every launch, so it always starts
+the copy you're running.
 
 **Global hotkeys** (also under the cog, off by default) work while a game has
 focus: **Ctrl+Alt+P** pauses and resumes captions, **Ctrl+Alt+K** clears the
@@ -578,7 +581,7 @@ Parakeet all land meaningfully closer to a paid service than Vosk does.
   the weak link no matter which model you run.
 
 Here is the same eleven-second clip through every engine, so the difference is
-concrete rather than adjectival (`npm run test:stt -- --all --wav=jfk.wav`):
+concrete rather than adjectival:
 
 ```
 Parakeet TDT 0.6B  And so, my fellow Americans. Ask not. What your country can do
@@ -753,111 +756,94 @@ ChatterLayer. You don't need any of it to use the app.
 **Contents**
 
 - [Running from source](#running-from-source)
-- [Scripts](#scripts)
+- [Testing](#testing)
 - [How it works](#how-it-works)
 - [Speaker colours](#speaker-colours)
-- [The DAVE encryption problem](#the-dave-encryption-problem)
+- [DAVE encryption](#dave-encryption)
 - [Performance: RAM, CPU, latency](#performance-ram-cpu-latency)
 - [Project layout](#project-layout)
 - [Shipping a release](#shipping-a-release)
 
 ## Running from source
 
-Requires **Node.js 18+** (developed and tested on 22). **No compiler toolchain** —
-no Visual Studio, no Python, no `node-gyp`.
+ChatterLayer is a [Tauri](https://tauri.app) app: Rust underneath, the window in
+plain HTML, CSS and JS (`public/`), drawn by the system's own web view (WebView2 on
+Windows, WebKit on macOS and Linux).
+You need **Node.js 22**, **Rust** (stable), a C compiler and **CMake** (the Opus
+decoder builds from source): on Windows the Visual Studio C++ build tools, on
+macOS the Xcode command-line tools, and on Linux the packages listed in
+`.github/workflows/ci.yml`.
 
 ```bash
 git clone https://github.com/ruptz/ChatterLayer.git
 cd ChatterLayer
-npm install
-npm run setup     # the recommended model for this machine (no libvosk needed)
-npm start
+npm install                       # the Tauri command-line tools, ESLint
+node scripts/fetch-runtimes.js    # libvosk and ONNX Runtime for this OS into vendor/runtime/
+npm start                         # tauri dev
 ```
 
-## Scripts
+A source checkout keeps speech models in `models/` beside the code; an installed
+build keeps them in `%APPDATA%\ChatterLayer\models`. Download one from the app's
+Speech model panel.
+
+## Testing
 
 ```bash
-npm run setup -- --list                    # every model, grouped by engine
-npm run setup -- --model=moonshine-base    # pick a specific one
-npm run setup -- --model=whisper-base
-npm run setup -- --runtime-only            # libvosk only (what CI uses)
-
-npm run selftest                           # DSP, tokenisers, segmentation, wiring
-npm run bench -- --all --wav=some.wav      # RAM, CPU and caption latency
-npm run test:stt -- --all --wav=some.wav   # transcribe a WAV on every model
-npm run test:vosk -- some.wav              # Vosk only, exercises the FFI binding
-npm run engine:headless          # run the engine without Electron, for debugging
-
-npm run hash-models                         # checksums for installed models
-npm run hash-models -- parakeet             # just one
-npm run hash-models -- some-model.zip       # a downloaded Vosk archive
+cd src-tauri
+cargo test --lib                  # colours, word filter, config, server gate,
+                                  # segmenter, tokenisers, mic gate, tunnel, versions
+# Transcribe a 16 kHz mono WAV with every installed ONNX model:
+CHATTERLAYER_TEST_WAV=some.wav cargo test --release --lib transcribes -- --ignored --nocapture
+# Real downloads of a model of each shape, and of the pinned cloudflared:
+CHATTERLAYER_TEST_DIR=some/empty/dir cargo test --lib installs -- --ignored
+npm run lint                      # the window's scripts
 ```
 
-`hash-models` prints paste-ready `MODEL_CATALOG` entries. Run it after changing
-a model's pinned revision: the revision, the byte sizes and the hashes all have
-to move together, or every download fails its checksum for reasons that look
-like corruption and aren't.
+The model catalogue — URLs, pinned revisions, sizes and checksums — is
+`src-tauri/models.json`. A model's revision, byte sizes and hashes have to move
+together, or every download fails its checksum for reasons that look like
+corruption and aren't.
 
-Config lives in `chatterlayer-config.json` in Electron's user-data folder
-(**Show config file** in the UI reveals it). The bot token inside is encrypted
-via `safeStorage`, backed by the OS keystore.
+Config lives in `%APPDATA%\ChatterLayer\chatterlayer-config.json` (**Show config
+file** in the app reveals it). The bot token is never in it: it's in Windows
+Credential Manager.
 
 ## How it works
 
 ```
 Discord voice channel
-   │  per-user Opus streams (48 kHz stereo)
+   │  per-user Opus, DAVE end-to-end encrypted
    ▼
-engine process (plain Node, forked)
-   │  prism-media  → Opus decode
-   │  resample.js  → 48 kHz stereo ➜ 16 kHz mono (25-tap FIR, −59 dB aliasing)
+serenity + songbird   (src-tauri/src/discord.rs)
+   │  decrypts, and decodes Opus straight to 16 kHz mono — no resampling step
    ▼
-stt-worker (worker thread)
-   │  one shared model, whichever engine — Vosk streams and keeps a recognizer
+speech thread         (src-tauri/src/stt/)
+   │  one shared model, whichever engine — Vosk streams and keeps a recogniser
    │  per speaker; the ONNX engines buffer each phrase and decode it once
    ▼
-Electron main  ── adds each speaker's colour ──▶  WebSocket :8777
-                                                   └─▶ /overlay  (OBS browser source)
+app                   (src-tauri/src/lib.rs) ── colour, name, word filter ──▶ WebSocket :8777
+                                                                    └─▶ /overlay  (OBS browser source)
 ```
 
-**Why the engine is a child process.** Native/FFI modules load against plain Node
-rather than Electron's ABI, a bot crash can't take the window down, and it can be
-run headless (`npm run engine:headless`) for debugging.
+**Why sign-in and join are separate.** The server and channel pickers are built
+from the signed-in session's cache, so the app signs in at launch and joins a
+voice channel later. Signing in must not load a speech model, so a bad token fails
+in seconds instead of after a long model load, and Disconnect leaves the call but
+keeps the session, so the pickers don't empty every time. Signing in again with
+the same token just re-publishes the tree, which makes it the Refresh button. The
+per-channel permission verdict is tri-state: without the bot's own member cached
+it's "unknown", never "can't join".
 
-**Why sign-in and join are separate.** The server/channel pickers are built from
-`client.guilds.cache`, which only exists once the bot is logged in — so the app
-signs in at launch (`signIn`) and joins a voice channel later (`start`). Two
-consequences worth keeping intact:
+**Why the runtimes load at runtime.** libvosk and ONNX Runtime are opened from
+the app's own folder when a model needs them, not linked in. Someone on Vosk never
+loads ONNX Runtime, and the build doesn't depend on which Visual C++ standard
+library the machine compiling it happens to have. Release builds only ever look
+in the app's own folder.
 
-- **Sign-in must not load a speech model.** It used to; with the
-  pickers depending on login, that would mean staring at empty dropdowns for
-  ~33 seconds on Gigaspeech. Signing in first also fails a bad token in about
-  two seconds rather than after a full model load.
-- **Disconnect calls `leave()`, not `stop()`.** `leave()` drops the voice
-  connection and the recognizers but keeps the Discord session, because logging
-  out would empty the pickers every time someone disconnected. Only app shutdown
-  calls `stop()`.
-
-`signIn` is idempotent and doubles as Refresh: called with the token already in
-use it just re-emits the tree, and called with a different one it tears the old
-session down first. The permission verdict per channel is deliberately
-**tri-state** — `permissionsFor` returns `null` when the bot's own member isn't
-cached, and rendering that as "can't join" would grey out channels that work.
-
-**Why not the `vosk` npm package.** It binds libvosk through `ffi-napi`, which has
-been unmaintained since 2022 and fails to compile on Node 18+ (`ffi-napi`'s
-bundled libffi errors out during assembly preprocessing). Forcing it to build
-would require every user to install Visual Studio Build Tools and Python, plus an
-`electron-rebuild` pass. ChatterLayer instead binds the **same official libvosk**
-through [koffi](https://koffi.dev/), which ships prebuilt N-API binaries — so the
-same install works on both Node and Electron with no toolchain. See
-`src/engine/vosk-binding.js`.
-
-**Why persistent audio subscriptions.** Subscribing on each `speaking start` event
-races the first voice packet and clips the first word of every utterance.
-ChatterLayer holds a persistent subscription per selected speaker and uses
-speaking events only to flush utterance boundaries. Discord sends no packets
-during silence, so idle subscriptions are free.
+**Why speaking ends after 100 ms of quiet.** Discord sends nothing while someone is
+silent, so the end of an utterance is packets stopping. Five quiet 20 ms ticks
+flush the speaker's recogniser, which makes the last words appear without waiting
+for a packet that may never come.
 
 ## Speaker colours
 
@@ -877,50 +863,52 @@ Result: **0% duplicate colours** for calls up to 16 people, while 81% of speaker
 still keep their preferred colour. Past 16 concurrent speakers the palette is
 exhausted and duplicates become unavoidable.
 
-## The DAVE encryption problem
+## DAVE encryption
 
-Symptom: `Failed to decrypt: DecryptionFailed(UnencryptedWhenPassthroughDisabled)`
-in the log, and a speaker's audio dying mid-call.
+Discord's DAVE end-to-end encryption covers voice. songbird handles it through the
+[`davey`](https://crates.io/crates/davey) crate — the same DAVE implementation
+`@discordjs/voice` used in 0.4 — so there's no protocol code here.
 
-This is Discord's DAVE end-to-end encryption. `@discordjs/voice` advertises E2EE
-support by default, but E2EE only tolerates unencrypted frames during brief
-(~10 s) "passthrough" windows around key changes. Once that window closes, an
-unencrypted packet is rejected, and after enough consecutive failures the audio
-stream throws and dies. The mismatch is easy to trigger, because Discord
-downgrades a call out of E2EE when a participant that can't do it joins — which
-is exactly what a bot is.
-
-**Do not "fix" this by setting `daveEncryption: false`.** It looks like the obvious
-answer and it's a trap: the flag is sent as `max_dave_protocol_version: 0` in the
-voice IDENTIFY payload, and Discord then never completes the handshake. The bot
-still *appears* in the voice channel — that part is the main gateway — but the
-voice connection never receives `SESSION_DESCRIPTION`, never reaches `Ready`, and
-the join times out after 30 s with "Could not join #channel within 30s".
-
-ChatterLayer instead leaves DAVE enabled and raises `decryptionFailureTolerance`.
-That works because of how `@discordjs/voice` consumes the result (`onUdpMessage`):
-an undecryptable packet returns nothing and is **skipped harmlessly**, but once
-the tolerance is exceeded it *throws*, and the throw calls `stream.destroy(error)`,
-killing that speaker's audio for the rest of the call. With a high tolerance, bad
-packets are simply dropped.
-
-The log shows throttled `[voice] Failed to decrypt…` lines plus the DAVE
-transition messages, which is what you need to diagnose it. A stream that does die
-is rebuilt automatically (5 attempts, then it asks the user to toggle the speaker
-off and on).
+What to expect: when the bot joins, or someone joins mid-call, there's a key
+change, and for about half a second packets can arrive before the bot has the new
+key. Those are dropped and that speaker's caption skips a fraction of a second;
+nothing else happens. songbird logs each one through `tracing`, which the app
+doesn't subscribe to, so they don't flood anything.
 
 ## Performance and limits
 
-Measured on Windows 11, Node 22.13, Ryzen 5 5600X (6 cores / 12 threads), against
-real speech. Reproduce with:
+### 0.5 against 0.4
 
-```bash
-npm run bench -- --all --speakers=7 --wav=some-16k-mono.wav
-```
+The same machine (Ryzen 5 5600X, 6 cores / 12 threads), the packaged 0.4 app
+against a release build of 0.5, each captioning the same looping recording through
+the same Parakeet model, measured across every process each app runs:
 
-Each model is measured in **its own child process**, because neither ONNX Runtime
-nor libvosk returns memory to the OS when a model is released — measuring two in
-one process reports the high-water mark of both.
+| | 0.4 (Electron) | 0.5 (Rust) |
+|---|---|---|
+| Idle CPU | 0.04% | 0.06% |
+| Idle memory | 103 MB | 96 MB |
+| Captioning CPU | 22.5% | 19.4% |
+| Captioning memory | 2,355 MB | 2,291 MB |
+| Start to first caption | 11.4 s | 7.3 s |
+| Download / installed | 172 MB / 452 MB | 30 MB / ~94 MB |
+
+And one 7.2-second clip through each ONNX model, decode only:
+
+| Model | 0.4 | 0.5 |
+|---|---|---|
+| Parakeet TDT 0.6B | 1096 ms | 721 ms |
+| Moonshine Base | 958 ms | 282 ms |
+| Whisper Tiny | 2070 ms | 1000 ms |
+| Whisper Base | 3399 ms | 1619 ms |
+| Whisper Small | 7680 ms | 3010 ms |
+
+Memory is the model's either way: the app around it is about 100 MB in both.
+
+### The detailed tables (measured on 0.4)
+
+Everything below was measured on 0.4's JavaScript engines against real speech.
+The memory figures carry over; the timings are upper bounds for 0.5, whose
+engines decode the same audio 1.5–3× faster.
 
 ### The whole table
 
@@ -1039,7 +1027,7 @@ speaker costs only a recognizer — not another copy of the model.
 
 - **Shared model:** ~116 MB, paid once.
 - **Per additional speaker:** **~12 MB** (the first is ~16 MB).
-- **Plus the Electron UI:** roughly 100–180 MB depending on platform.
+- **Plus the app and its window:** about 100 MB.
 - **Realistic total for a 7-person call:** **~400–450 MB**.
 
 Switching a speaker off frees their recognizer immediately.
@@ -1064,8 +1052,8 @@ at once is therefore roughly **1–2 cores**, and that peak is rare: Discord
 transmits no packets while someone is silent, so idle speakers cost essentially
 nothing.
 
-Decoding runs on a **dedicated worker thread**, deliberately: blocking the main
-thread would stall the Discord voice socket and drop inbound audio packets.
+Decoding runs on a **dedicated thread**, deliberately: blocking the async runtime
+would stall the Discord voice socket and drop inbound audio packets.
 
 ### Latency
 
@@ -1076,7 +1064,7 @@ End-to-end, speech → pixels on stream:
 | Stage | Typical |
 |---|---|
 | Discord network + 20 ms Opus framing | ~60–100 ms |
-| Resample + queue to worker | <5 ms |
+| Decode + queue to the speech thread | <5 ms |
 | Partial decode + 120 ms update throttle | ~120–250 ms |
 | Local WebSocket + browser paint | <20 ms |
 | **Live partial text appears** | **~250–500 ms** |
@@ -1104,180 +1092,76 @@ which is the intended behaviour.
 
 ### Adding another engine
 
-Four engines share one interface, and everything above `src/engine/stt/` deals in
-`{ userId, text, isFinal }` without knowing which produced it. A fifth needs:
+Four engines share one interface, and everything above `src-tauri/src/stt/` deals
+in `{ userId, text, isFinal }` without knowing which produced it. A fifth needs:
 
-1. A module in `src/engine/stt/` exporting `static streaming` and
-   `static load(dir)`. Streaming engines expose `createSession()`; the rest expose
-   `transcribe(Float32Array) → Promise<string>` and get utterance buffering,
-   silence detection and decode scheduling for free.
-2. An entry in `LOADERS` and `ENGINES` in `src/engine/stt/index.js`.
-3. A catalogue entry in `src/shared/models.js`.
+1. A module in `src-tauri/src/stt/` with a `load(dir)` and either streaming
+   sessions (like `vosk.rs`) or `transcribe(&[f32]) -> String`, which gets
+   utterance buffering, silence detection and decode scheduling for free.
+2. An arm in `run` and `ClipEngine` in `src-tauri/src/stt/mod.rs`.
+3. A catalogue entry in `src-tauri/models.json`.
 
-Nothing else changes — not the worker, not the Discord side, not the caption
-server, not the overlay. The picker, the downloader and the manifest on disk all
-come from the catalogue entry.
+Nothing else changes — not the Discord side, not the caption server, not the
+overlay. The picker, the downloader and the manifest on disk all come from the
+catalogue entry.
 
 ## Project layout
 
 ```
-src/
-  main/       Electron main process — window, config, server, engine supervisor
-    tunnel.js   Optional Cloudflare Quick Tunnel (opt-in, never auto-started)
-  engine/     Discord bot, Opus decode, resampling, speech worker
-    stt/      The four speech engines and everything they share
-  renderer/   Control panel UI
-  shared/     Colour hashing, model catalogue, path resolution, word filter
-web/
-  overlay.html    OBS browser source (reads per-viewer overrides from its URL)
+src-tauri/
+  src/
+    lib.rs        The app: window, tray, commands, caption relay, sharing
+    discord.rs    Sign-in, the server/channel tree, voice, per-speaker audio
+    stt/          The four speech engines and everything they share
+    server.rs     The overlay page and its WebSocket feed, with the access gate
+    tunnel.rs     Optional Cloudflare Quick Tunnel (opt-in, pinned cloudflared)
+    config.rs     Settings, and the token in Credential Manager
+    install.rs    Model downloads, checked against models.json
+    mic.rs        Voice gate for the local mic
+    meta.rs       Update check, bug-report link, What's new
+    colors.rs, wordfilter.rs, models.rs
+  icons/app-icon.png  The app icon's source: the logo with rounded corners.
+                      After changing it: npx tauri icon src-tauri/icons/app-icon.png -o src-tauri/icons
+  models.json     The model catalogue
+  whats-new.json  Release notes: the in-app card and the GitHub release
+public/           The window: index.html, styles.css, renderer.js, bridge.js
+web/overlay.html  OBS browser source (built into the app)
 scripts/
-  setup.js        Downloads a model (+ the libvosk runtime if it needs one)
-  test-stt.js     Transcribe a WAV with any installed model
-  test-vosk.js    Vosk-only variant, exercises the FFI binding directly
-  bench.js        RAM, CPU and caption-latency report
-  selftest.js     Audio, DSP, tokeniser, segmentation, colour, sharing and wiring tests
-```
-
-Inside `src/engine/stt/`:
-
-```
-index.js       Engine registry — the only file that knows the engines apart
-vosk.js        Vosk, via the koffi FFI binding (streaming)
-moonshine.js   Moonshine, ONNX Runtime — raw audio in, no feature extraction
-whisper.js     Whisper, ONNX Runtime — fixed 30 s window
-parakeet.js    Parakeet TDT, ONNX Runtime — transducer, not encoder-decoder
-seq2seq.js     Greedy token loop shared by Whisper and Moonshine
-features.js    Whisper's log-mel front end
-fft.js         Radix-2 FFT + Bluestein, for the 400-point window
-tokenizer.js   Detokenisers for tokenizer.json and NeMo vocab.txt
-segmenter.js   Turns a stream of audio into utterances (silence detection)
-onnx.js        Runtime loading, session options, the decode queue
+  fetch-runtimes.js  libvosk and ONNX Runtime into vendor/, checksummed
 ```
 
 ## Shipping a release
 
-**You don't build releases on your own machine — CI does.** Cutting a release is
-two commands:
+**CI builds releases, not your machine.** Bump the version in `package.json`,
+`src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`, give it an entry in
+`src-tauri/whats-new.json`, then:
 
 ```bash
-# 1. bump "version" in package.json, commit it
-# 2. tag and push
-git tag v1.0.1
-git push origin v1.0.1
+git tag v0.5.1
+git push origin v0.5.1
 ```
 
-That triggers `release.yml`, which builds all three platforms in parallel and
-opens a **draft** GitHub Release with everything attached. Review it, then hit
-publish.
+`release.yml` checks the tag matches all three versions, fetches the runtimes,
+runs the tests, builds the installer and the WidgetCake zip, attests both, and
+opens a **draft** release with a Sigstore-signed `SHA256SUMS` and that version's
+What's new notes. Review it, then publish.
+
+| Artifact | |
+|---|---|
+| `ChatterLayer-<version>-Setup.exe` | Windows installer. Removes 0.4 or earlier first. |
+| `ChatterLayer-<version>-macos-arm64.dmg`, `-macos-x64.dmg` | macOS |
+| `ChatterLayer-<version>-linux-x64.AppImage`, `.deb` (and `linux-arm64`) | Linux |
+| `ChatterLayer-<version>-<platform>.zip` | The app on its own, for each of those. What WidgetCake installs; Windows's is `-win.zip`. |
+
+Windows is tested. macOS and Linux are built from the same code but not tested
+by us, so the release notes ask people to report issues.
 
 ### Smoke-test before you publish
 
-CI builds the installers but never runs them, so this is the only check that the
-thing actually launches. **Do it on a machine that isn't your dev box** — a
-fresh VM is ideal. Your own PC already has models downloaded, a config file,
-`vendor/libvosk`, and Node installed, which is exactly the state that hides "it
-needs something my machine happens to have".
-
-Install from the draft's own installer, not a local build. Ten minutes:
-
-1. **Install and launch.** Click through the SmartScreen warning — you're
-   checking the path a real user takes, warning and all.
-2. **Download the model the app recommends.** It marks one based on your RAM and
-   CPU threads, so this exercises that detection as well as the download. Watch
-   the bar reach 100% and finish — a failed checksum or a short file stops it
-   here rather than at load time. (Moonshine Base is the quick one if you're
-   short on time.)
-3. **Paste a bot token, pick a server and channel, Connect.** Pasting signs in
-   on its own — no button press. The Log panel names each stage, so anything
-   that stalls tells you where.
-4. **Caption two people at once.** Switch them both on in the Channels panel and
-   check the OBS overlay shows both, each in their own colour. One speaker is
-   not a real test — the interesting bugs live in two.
-5. **Start the Remote overlay tunnel, open the link, stop it.** Confirm it comes
-   up *down* by default, since that's the promise.
-6. **Close to tray, reopen from the tray, quit from the tray.** Easy to break
-   and immediately obvious to users when it is.
-
-Two more worth doing while the draft is still a draft:
-
-- **Verify the checksums you're asking other people to trust.** The
-  `cosign verify-blob` and `sha256sum -c` commands are in the comment above the
-  *Generate SHA256SUMS* step in `release.yml`. If they don't pass on your own
-  download, nobody else's will either.
-- **On a Mac, take the Gatekeeper path.** Right-click → *Open*, then let the
-  app's one-click quarantine fix run and relaunch normally. It can't be tested
-  from Windows, and it's the first thing every macOS user meets.
-
-Publishing is the last step, because it's the one that tells every existing user
-there's an update — see below.
-
-### How users find out
-
-The running version is stamped in the top-right of the control panel. Once a
-day ChatterLayer asks GitHub whether a newer release exists; if there is one,
-the stamp lights amber and opens the release page when clicked.
-
-Nothing is downloaded and nothing self-installs — see the comment at the top of
-`src/main/updates.js` for why. The short version: the binaries are unsigned,
-which rules out macOS auto-update entirely, and neither the portable `.exe` nor
-the `.deb` can replace themselves. A link works for every build we ship.
-
-Two things worth knowing:
-
-- **Drafts are invisible to it.** The check reads GitHub's *latest published
-  release*, which excludes drafts and prereleases. Nobody is notified until you
-  actually hit publish on the draft the workflow opened.
-- **It's the only request ChatterLayer makes on its own** — everything else is
-  Discord and localhost. It's a visible setting for that reason: **Output →
-  Check for updates**, on by default. Switched off, no request is made at all.
-
-### Why not build all three locally?
-
-Because you can't. Each installer must be built on its own OS:
-
-| Target | Buildable on Windows? |
-|---|---|
-| Windows `.exe` | Yes — `npm run dist:win` |
-| macOS `.dmg` | **No.** Requires macOS (code signing and `hdiutil`) |
-| Linux `.AppImage` / `.deb` | Not practically — needs Linux or Docker |
-
-The release workflow sidesteps this with a build matrix: `windows-latest`,
-`macos-latest` and `ubuntu-latest` each build their own target natively. That's
-the main reason to release through CI rather than by hand.
-
-### What gets published
-
-| Platform | Artifacts |
-|---|---|
-| Windows | `ChatterLayer-<version>-Setup.exe` (installer), `ChatterLayer-<version>-portable.exe` |
-| macOS | `ChatterLayer-<version>.dmg` (x64 + arm64) |
-| Linux | `ChatterLayer-<version>.AppImage`, `.deb` |
-
-Roughly 90–140 MB per file. Speech models are **not** included — the app downloads
-the one the user picks on first run.
-
-### Code signing
-
-The builds are **unsigned** — certificates are a recurring cost this project
-isn't taking on. What that means, and what's done about it instead:
-
-- **Windows** — SmartScreen warns on first launch (*More info* → *Run anyway*).
-  Reputation builds up per release as downloads accumulate. To sign anyway, add
-  `CSC_LINK` and `CSC_KEY_PASSWORD` as repository secrets; `release.yml` already
-  passes them through.
-- **macOS** — Gatekeeper stamps the download with `com.apple.quarantine` and may
-  call it "damaged". On first launch the app detects this and offers to run
-  `xattr -dr com.apple.quarantine` on itself and relaunch (see
-  `src/main/macos-quarantine.js`), so only the very first open needs the
-  right-click → *Open* dance. A proper fix still needs an Apple Developer
-  account ($99/yr) plus notarisation.
-- **Linux** — no signing expectations; users just `chmod +x` the AppImage.
-
-**Verification, in place of signatures.** Every release carries a `SHA256SUMS`
-file signed with [Sigstore](https://www.sigstore.dev/) cosign (keyless, via the
-CI's GitHub OIDC identity — no key or certificate), and every installer has a
-[build provenance attestation](https://docs.github.com/actions/security-guides/using-artifact-attestations).
-A user can check both:
+CI never runs the installer, so do it on a machine that isn't your dev box:
+install from the draft, download the recommended model, connect with two people
+switched on, start and stop the tunnel, close to tray and quit from the tray.
+Then check the checksums you're asking other people to trust:
 
 ```bash
 sha256sum -c SHA256SUMS
@@ -1288,39 +1172,9 @@ cosign verify-blob --bundle SHA256SUMS.cosign.bundle \
 gh attestation verify ChatterLayer-*-Setup.exe --repo ruptz/ChatterLayer
 ```
 
-### Local builds
+### How users find out
 
-```bash
-npm run icon                       # regenerate build/icon.png from build/icon.svg
-npm run setup -- --runtime-only    # fetch libvosk (required before packaging)
-npm run pack                       # unpacked build — fast, for testing
-npm run dist:win                   # real installer + portable exe
-```
-
-### What ships, and what doesn't
-
-**Bundled:** the `libvosk` runtime, for the Vosk models. It's platform-specific so
-it must be chosen at build time, and it lives outside the asar archive because
-`koffi.load()` needs a real file on disk. The macOS build ships a universal
-(x86_64 + arm64) library, so Apple Silicon runs natively.
-
-**Also bundled:** ONNX Runtime, for Moonshine, Whisper and Parakeet. It arrives as
-an ordinary npm dependency with prebuilt N-API binaries, so — like koffi — it needs
-no compiler on the user's machine and no `electron-rebuild` pass. Two things about
-it are load-bearing in `electron-builder.yml`:
-
-- The whole `onnxruntime-node` directory is in `asarUnpack`, not just `**/*.node`.
-  The binding pulls in `onnxruntime.dll` as an ordinary shared-library dependency,
-  so the OS loader has to find it as a real file beside the binding.
-- `npm install` fetches 246 MB: a library for all six platform/arch combinations
-  plus a DirectML provider. ChatterLayer asks for the CPU provider only, so the
-  per-platform `files` filters drop the architectures not being built and the GPU
-  libraries — about 200 MB and 38 MB respectively on a Windows build. CI asserts
-  both, because the failure mode is silent.
-
-**Not bundled:** speech models. They're 40 MB–2.5 GB, each user needs exactly one,
-and the app downloads the chosen model into the user's data directory on first
-run — which also keeps them out of Program Files, where the app has no write
-access.
-
-CI must therefore run `npm run setup -- --runtime-only` before packaging.
+The version sits in the title bar. Once per launch the app asks GitHub for the
+newest *published* release (drafts don't count) and lights the stamp amber if
+there is one. Nothing downloads or installs itself, and it's a visible switch:
+**Output → Check for updates**.

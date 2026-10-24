@@ -41,13 +41,10 @@ export const metadata: Metadata = {
     title: `${site.name} — ${site.tagline}`,
     description: site.description,
   },
-  /* Both copied from the app's build/icon.* — the SVG where a browser will
-     take it, the PNG for the places that won't. */
+  /* The app's own icon (src-tauri/icons/app-icon.png) at 180px: Apple's
+     touch-icon size, and enough for every favicon. */
   icons: {
-    icon: [
-      { url: '/logo.svg', type: 'image/svg+xml' },
-      { url: '/logo.png', type: 'image/png' },
-    ],
+    icon: [{ url: '/logo.png', type: 'image/png' }],
     apple: '/logo.png',
   },
 };
