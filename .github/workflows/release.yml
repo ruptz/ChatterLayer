@@ -37,6 +37,12 @@ on:
 permissions:
   contents: read
 
+# One release run per tag at a time; a second push of the same tag waits
+# rather than racing the first to create the release.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # The installers take their version from the project files, not the tag, and
   # the update badge compares the two. A tag that disagrees fails here, before
@@ -44,6 +50,7 @@ jobs:
   verify:
     name: Check the tag
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Tag matches the project version
@@ -65,6 +72,7 @@ jobs:
     name: Build ${{ matrix.name }}
     needs: verify
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     permissions:
       contents: read
       id-token: write # actions/attest-build-provenance
@@ -119,10 +127,9 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-          key: ${{ matrix.platform }}
+      # No Rust cache here on purpose: a tag's cache can't be restored by the
+      # next tag, so saving one would only add minutes of upload to every
+      # build.
 
       # The web view and tray library Tauri builds against, and D-Bus for the
       # keystore the bot token goes in.
@@ -141,12 +148,8 @@ jobs:
       - name: Fetch the speech runtimes
         run: node scripts/fetch-runtimes.js ${{ matrix.runtimes }}
 
-      # Not on the cross-compiled Intel Mac build, whose tests can't run on an
-      # Apple Silicon runner as the target they were built for.
-      - name: Test
-        if: matrix.target == '' || matrix.target == 'aarch64-apple-darwin'
-        working-directory: src-tauri
-        run: cargo test --release --lib
+      # No tests here: a tag is only ever cut from master, and master only
+      # takes commits whose CI tests passed on all three systems.
 
       - name: Build
         run: npm run build -- --bundles ${{ matrix.bundles }} ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
@@ -208,6 +211,7 @@ jobs:
     name: Publish release
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write # create the release and upload assets
       id-token: write # cosign keyless signing via GitHub OIDC

@@ -1,14 +1,24 @@
 name: CI
 
-# Fast checks on every push and pull request. Deliberately does NOT download
-# speech models (up to 2.5 GB); the tests that need one are marked #[ignore]
-# and run by hand — see src-tauri/src/stt/mod.rs.
+# Fast checks on every pull request and on master. Deliberately does NOT
+# download speech models (up to 2.5 GB); the tests that need one are marked
+# #[ignore] and run by hand — see src-tauri/src/stt/mod.rs.
+#
+# The job names are required checks on master (Settings → Rules), so renaming
+# one means updating the rule too.
 
 on:
+  # Branches other than master are covered by their pull request, so a commit
+  # on a PR branch is checked once, not once per trigger.
   push:
-    branches: [main, master, dev, tauri]
+    branches: [master]
   pull_request:
   workflow_dispatch:
+
+# A newer push to the same pull request makes the older run pointless.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Read-only. Nothing here publishes anything; release.yml is the only workflow
 # that needs more than this.
@@ -19,6 +29,7 @@ jobs:
   lint:
     name: Lint the window's scripts
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -36,6 +47,7 @@ jobs:
   test:
     name: Rust tests and build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       # Nobody here runs macOS or Linux, so this is where a break on either
       # shows up first. One failing must not hide the others.
@@ -55,9 +67,12 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      # Saved from master only: pull requests restore it but never overwrite
+      # it, so one PR can't evict the cache every other run starts from.
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: Linux build libraries
         if: runner.os == 'Linux'
@@ -66,6 +81,12 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libdbus-1-dev pkg-config cmake
 
       - run: npm ci
+
+      # The pinned runtimes only change when the fetch script's pins do.
+      - uses: actions/cache@v4
+        with:
+          path: vendor/runtime
+          key: runtimes-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/fetch-runtimes.js') }}
 
       # Bundled into the build, so a missing or swapped runtime fails here
       # rather than when someone picks a model.
@@ -76,7 +97,9 @@ jobs:
         working-directory: src-tauri
         run: cargo test --lib
 
-      # No installer, just the app: fast, and enough to catch a broken Tauri
-      # config or a resource path that no longer exists.
+      # A debug build, so it reuses everything the tests just compiled instead
+      # of building every dependency again in release mode. No installer: this
+      # is here to catch a broken Tauri config or a resource path that no
+      # longer exists.
       - name: Build
-        run: npm run build -- --no-bundle
+        run: npm run build -- --debug --no-bundle

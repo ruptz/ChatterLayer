@@ -9,6 +9,14 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Minor and patch bumps arrive as one PR, so a busy week of crate
+    # releases costs one CI run instead of one per crate. Majors stay
+    # separate so they get read.
+    groups:
+      minor-patch:
+        update-types:
+          - minor
+          - patch
 
   # The root holds only build tools (the Tauri CLI, ESLint).
   - package-ecosystem: npm
