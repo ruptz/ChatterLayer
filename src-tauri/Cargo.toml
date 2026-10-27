@@ -1,6 +1,6 @@
 [package]
 name = "chatterlayer"
-version = "0.5.0"
+version = "0.5.1"
 description = "Live, colour-coded Discord voice captions for OBS. Free, offline, fully local."
 authors = ["ruptz"]
 license = "MIT"

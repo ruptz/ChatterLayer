@@ -100,6 +100,10 @@ pub fn create_session(file: &Path, arena: bool) -> Result<Session> {
             .with_parallel_execution(false)?
             .with_intra_threads(thread_budget())?
             .with_inter_threads(1)?
+            // Idle pool threads otherwise busy-wait for the next run, and
+            // Parakeet's joint network is hundreds of tiny runs per clip: the
+            // whole pool read as pegged through continuous speech.
+            .with_intra_op_spinning(false)?
             .commit_from_file(file)
     };
     build().map_err(|e| format!("Could not load {name}: {e}"))

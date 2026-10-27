@@ -64,6 +64,8 @@ pub struct Segmenter {
     speech: usize,
     first_speech: Option<usize>,
     last_speech: usize,
+    /// RMS of each analysed frame, for finding a quiet place to cut.
+    levels: Vec<f32>,
     /// Not reset between utterances: it belongs to the speaker's mic and room.
     noise: f32,
 }
@@ -78,6 +80,7 @@ impl Segmenter {
             speech: 0,
             first_speech: None,
             last_speech: 0,
+            levels: Vec::with_capacity(200),
             noise: ABSOLUTE_FLOOR,
         }
     }
@@ -88,6 +91,7 @@ impl Segmenter {
         self.speech = 0;
         self.first_speech = None;
         self.last_speech = 0;
+        self.levels.clear();
     }
 
     pub fn has_speech(&self) -> bool {
@@ -104,6 +108,7 @@ impl Segmenter {
             let start = self.analyzed;
             let frame = &self.buf[start..start + FRAME];
             let rms = (frame.iter().map(|x| x * x).sum::<f32>() / FRAME as f32).sqrt();
+            self.levels.push(rms);
             if rms > ABSOLUTE_FLOOR.max(self.noise * SPEECH_MARGIN) {
                 self.speech += FRAME;
                 self.first_speech.get_or_insert(start);
@@ -140,12 +145,35 @@ impl Segmenter {
     /// trailing silence is pure decode cost, and for Whisper it is where
     /// hallucinations come from.
     pub fn view(&self) -> Option<Vec<f32>> {
+        self.bounds().map(|(from, to)| self.slice(from, to))
+    }
+
+    /// Where `view` would cut, as sample offsets into the buffer.
+    pub fn bounds(&self) -> Option<(usize, usize)> {
         if !self.has_speech() {
             return None;
         }
         let from = self.first_speech?.saturating_sub(LEAD);
         let to = self.buf.len().min(self.last_speech + TRAIL);
-        (to > from).then(|| self.buf[from..to].to_vec())
+        (to > from).then_some((from, to))
+    }
+
+    pub fn slice(&self, from: usize, to: usize) -> Vec<f32> {
+        self.buf[from..to].to_vec()
+    }
+
+    /// The quietest moment between two offsets, judged over 100 ms rather than
+    /// one frame so a dip inside a word doesn't win: where a cut is least
+    /// likely to split one.
+    pub fn quietest(&self, from: usize, to: usize) -> usize {
+        const SPAN: usize = 5;
+        let (lo, hi) = (from / FRAME, (to / FRAME).min(self.levels.len()));
+        if hi < lo + SPAN {
+            return from;
+        }
+        let loudness = |i: usize| self.levels[i..i + SPAN].iter().sum::<f32>();
+        let best = (lo..=hi - SPAN).min_by(|&a, &b| loudness(a).total_cmp(&loudness(b))).unwrap_or(lo);
+        (best + SPAN / 2) * FRAME
     }
 
     /// `view`, then start a new utterance.
@@ -182,5 +210,15 @@ mod tests {
         s.push(&vec![0.001; ms(3100)]);
         assert_eq!(s.poll(), Some(Verdict::Discard));
         assert!(s.view().is_none());
+    }
+
+    #[test]
+    fn quietest_finds_the_gap() {
+        let mut s = Segmenter::new(20);
+        s.push(&tone(1000, 0.3));
+        s.push(&tone(300, 0.01));
+        s.push(&tone(1000, 0.3));
+        let cut = s.quietest(ms(200), ms(2100));
+        assert!(cut >= ms(1000) && cut <= ms(1300), "cut at {} ms", cut * 1000 / SAMPLE_RATE);
     }
 }

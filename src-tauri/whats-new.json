@@ -1,5 +1,11 @@
 [
   {
+    "version": "0.5.1",
+    "items": [
+      "Much lighter on your PC when someone talks for a long stretch. Live captions used to re-read the whole sentence on every update, and the speech engine kept every core busy between words; now it only reads the newest part and rests in between."
+    ]
+  },
+  {
     "version": "0.5.0",
     "items": [
       "Rebuilt from the ground up in Rust. The download is about a sixth of the size, 30 MB instead of 172 MB, and it takes about a fifth of the space once installed.",

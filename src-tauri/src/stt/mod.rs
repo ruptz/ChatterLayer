@@ -31,6 +31,12 @@ const STREAM_PARTIAL: Duration = Duration::from_millis(120);
 /// interval comes from measured decode time — see `partial_interval`.
 const BASE_PARTIAL: Duration = Duration::from_millis(700);
 
+/// A speaker waits this many decode-lengths between partials, so live captions
+/// keep the decoder busy at most a quarter of the time. At 2 they held it half
+/// the time, and on Parakeet that read as ~17% of a 12-thread machine through
+/// any long turn; at 4 it is ~10%, with a caption about every 1.5 s.
+const PARTIAL_WEIGHT: u32 = 4;
+
 /// Discord sends nothing while a speaker is quiet, so silence can't be heard —
 /// there's no audio. The speaking-end flush covers the normal case; this covers
 /// the times it never comes.
@@ -40,6 +46,18 @@ const IDLE_TICK: Duration = Duration::from_millis(150);
 /// Longest clip handed to an engine. Whisper physically can't encode more than
 /// its 30-second window, and for the others a long clip is a long wait.
 const MAX_UTTERANCE_SECONDS: usize = 20;
+
+/// Live captions decode only the end of a long utterance; anything older is
+/// decoded once, frozen as text, and the window moves on. Re-decoding the whole
+/// utterance on every update made a long turn cost ten times its final
+/// transcript. The final still decodes the whole clip, so context lost at a
+/// freeze point only ever shows in the live caption.
+const PARTIAL_WINDOW: usize = 16_000 * 8;
+/// A freeze leaves at least this much behind it, so the window always opens
+/// with some context...
+const PARTIAL_KEEP: usize = 16_000 * 3;
+/// ...and freezes at least this much, so it never decodes slivers.
+const PARTIAL_MIN_FREEZE: usize = 16_000 * 2;
 
 /// A speaker whose audio fails on essentially every packet would otherwise
 /// report one error per 20 ms. Report the first, stay quiet through a short run
@@ -132,9 +150,10 @@ impl ClipEngine {
     }
 
     /// Whisper's encoder runs over a padded 30-second window whatever the clip
-    /// length, so its partials never get cheap the way the others' do.
-    fn partial_weight(&self) -> u32 {
-        if matches!(self, Self::Whisper(_)) { 4 } else { 2 }
+    /// length, so a shorter clip saves it nothing and a freeze costs it a whole
+    /// extra decode.
+    fn windowed(&self) -> bool {
+        !matches!(self, Self::Whisper(_))
     }
 }
 
@@ -285,6 +304,17 @@ struct ClipSpeaker {
     last_partial_at: Option<Instant>,
     /// Bumped on every close, so a late partial from the last one is dropped.
     epoch: u64,
+    /// How far into the utterance the live caption is frozen, and its text.
+    frozen_at: Option<usize>,
+    frozen: String,
+}
+
+impl ClipSpeaker {
+    fn close(&mut self) {
+        self.epoch += 1;
+        self.frozen_at = None;
+        self.frozen.clear();
+    }
 }
 
 /// Finals are guaranteed — queued, and always run. Partials are speculative:
@@ -296,8 +326,9 @@ struct Clips<'a> {
     out: &'a dyn Fn(Out),
     speakers: HashMap<String, ClipSpeaker>,
     finals: VecDeque<(String, Vec<f32>)>,
-    /// user -> (epoch, clip), in arrival order.
-    partials: VecDeque<(String, u64, Vec<f32>)>,
+    /// user -> epoch, in arrival order. The audio is taken when the decode
+    /// runs, so it's as fresh as it can be.
+    partials: VecDeque<(String, u64)>,
     last_run: Duration,
 }
 
@@ -343,6 +374,8 @@ impl<'a> Clips<'a> {
                             last_partial: String::new(),
                             last_partial_at: None,
                             epoch: 0,
+                            frozen_at: None,
+                            frozen: String::new(),
                         },
                     );
                     (self.out)(Out::SpeakersChanged);
@@ -380,7 +413,7 @@ impl<'a> Clips<'a> {
     }
 
     fn cancel_partials(&mut self, user_id: &str) {
-        self.partials.retain(|(u, _, _)| u != user_id);
+        self.partials.retain(|(u, _)| u != user_id);
     }
 
     fn clear_partial(&mut self, user_id: &str) {
@@ -395,7 +428,7 @@ impl<'a> Clips<'a> {
     fn finalize(&mut self, user_id: &str) {
         let Some(s) = self.speakers.get_mut(user_id) else { return };
         let clip = s.seg.take();
-        s.epoch += 1;
+        s.close();
         self.cancel_partials(user_id);
         match clip {
             Some(clip) => self.finals.push_back((user_id.to_string(), clip)),
@@ -407,7 +440,7 @@ impl<'a> Clips<'a> {
     fn discard(&mut self, user_id: &str) {
         let Some(s) = self.speakers.get_mut(user_id) else { return };
         s.seg.reset();
-        s.epoch += 1;
+        s.close();
         self.cancel_partials(user_id);
         self.clear_partial(user_id);
     }
@@ -419,7 +452,7 @@ impl<'a> Clips<'a> {
     /// the CPU goes to finals instead.
     fn partial_interval(&self) -> Duration {
         let active = self.speakers.len().max(1) as u32;
-        BASE_PARTIAL.max(self.last_run * self.engine.partial_weight() * active)
+        BASE_PARTIAL.max(self.last_run * PARTIAL_WEIGHT * active)
     }
 
     fn maybe_partial(&mut self, user_id: &str) {
@@ -432,12 +465,14 @@ impl<'a> Clips<'a> {
         if s.last_partial_at.is_some_and(|t| now - t < interval) {
             return;
         }
-        let Some(clip) = s.seg.view() else { return };
+        if !s.seg.has_speech() {
+            return;
+        }
         s.last_partial_at = Some(now);
         let epoch = s.epoch;
         // A newer partial replaces the waiting one.
         self.cancel_partials(user_id);
-        self.partials.push_back((user_id.to_string(), epoch, clip));
+        self.partials.push_back((user_id.to_string(), epoch));
     }
 
     /// Close utterances for speakers who have simply gone quiet.
@@ -477,14 +512,38 @@ impl<'a> Clips<'a> {
             }
             return;
         }
-        let Some((user_id, epoch, clip)) = self.partials.pop_front() else { return };
+        let Some((user_id, epoch)) = self.partials.pop_front() else { return };
+        let Some(s) = self.speakers.get(&user_id).filter(|s| s.epoch == epoch) else { return };
+        let Some((from, to)) = s.seg.bounds() else { return };
+        let start = s.frozen_at.unwrap_or(from);
+        let freeze = (self.engine.windowed() && to - start > PARTIAL_WINDOW).then(|| {
+            let cut = s.seg.quietest(start + PARTIAL_MIN_FREEZE, to - PARTIAL_KEEP);
+            (cut, s.seg.slice(start, cut))
+        });
+        let tail = s.seg.slice(freeze.as_ref().map_or(start, |(cut, _)| *cut), to);
+
         // A failed partial isn't worth reporting; the final will say so.
-        let Ok(text) = self.timed(&clip) else { return };
+        let started = Instant::now();
+        let frozen = match freeze {
+            Some((cut, clip)) => match self.engine.transcribe(&clip) {
+                Ok(text) => Some((cut, text)),
+                Err(_) => return,
+            },
+            None => None,
+        };
+        let text = self.engine.transcribe(&tail);
+        self.last_run = started.elapsed();
+        let Ok(text) = text else { return };
+
         let Some(s) = self.speakers.get_mut(&user_id) else { return };
-        let clean = text.trim();
-        if s.epoch == epoch && !clean.is_empty() && clean != s.last_partial {
-            s.last_partial = clean.to_string();
-            (self.out)(Out::Partial { user_id, text: clean.into() });
+        if let Some((cut, more)) = frozen {
+            s.frozen_at = Some(cut);
+            s.frozen = format!("{} {}", s.frozen, more.trim()).trim().to_string();
+        }
+        let clean = format!("{} {}", s.frozen, text.trim()).trim().to_string();
+        if !clean.is_empty() && clean != s.last_partial {
+            s.last_partial = clean.clone();
+            (self.out)(Out::Partial { user_id, text: clean });
         }
     }
 }
