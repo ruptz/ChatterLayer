@@ -40,7 +40,7 @@ md-5 = "0.10"
 url = "2"
 flate2 = "1"
 sha2 = "0.10"
-getrandom = "0.3"
+getrandom = "0.4"
 
 [target.'cfg(windows)'.dependencies]
 # The same versions Tauri's WebView2 backend uses, so its controller type fits.
