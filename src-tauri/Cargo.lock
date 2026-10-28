@@ -691,12 +691,10 @@ dependencies = [
  "futures-util",
  "getrandom 0.3.4",
  "keyring",
+ "layer-speech",
  "libc",
- "libloading 0.8.9",
  "md-5",
- "ort",
  "reqwest 0.12.28",
- "rustfft",
  "serde",
  "serde_json",
  "serenity",
@@ -3074,6 +3072,18 @@ dependencies = [
  "security-framework 3.7.0",
  "windows-sys 0.60.2",
  "zeroize",
+]
+
+[[package]]
+name = "layer-speech"
+version = "0.3.0"
+source = "git+https://github.com/ruptz/LayerKit?tag=v0.3.0#fa9bb9c8e23b06cc123d4ab192e30abe1bb1646c"
+dependencies = [
+ "libloading 0.8.9",
+ "ort",
+ "rustfft",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

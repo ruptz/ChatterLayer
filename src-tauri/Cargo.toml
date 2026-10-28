@@ -30,11 +30,8 @@ axum = { version = "0.8", features = ["ws"] }
 futures-util = "0.3"
 serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "model", "cache", "rustls_backend", "voice"] }
 songbird = { version = "0.6.1", features = ["receive"] }
-libloading = "0.8"
-# Loaded from onnxruntime.dll at runtime: the static build needs a newer
-# MSVC standard library than some machines (and VS 2019) link against.
-ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "load-dynamic", "api-23"] }
-rustfft = "6"
+# Speech engines, mic gate and model discovery, shared with the other Layer apps.
+layer-speech = { git = "https://github.com/ruptz/LayerKit", tag = "v0.3.0" }
 keyring = { version = "3", features = ["windows-native", "apple-native", "sync-secret-service", "crypto-rust"] }
 base64 = "0.22"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json"] }
