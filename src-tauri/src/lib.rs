@@ -10,12 +10,13 @@ mod config;
 mod discord;
 mod install;
 mod meta;
-mod mic;
 mod models;
 mod server;
-mod stt;
 mod tunnel;
 mod wordfilter;
+
+// Speech engines and the mic gate are shared with the other Layer apps.
+use layer_speech::{mic, stt};
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -1159,6 +1160,11 @@ pub fn run() {
             if config.str("/lastSeenVersion") != version {
                 config.update(json!({ "lastSeenVersion": version }));
             }
+            layer_speech::init(layer_speech::App {
+                name: "ChatterLayer",
+                env_prefix: "CHATTERLAYER",
+                dev_vendor: Some(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("vendor")),
+            });
             let models_dir = models::models_dir(&data_dir);
             let _ = std::fs::create_dir_all(&models_dir);
 

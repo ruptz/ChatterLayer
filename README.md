@@ -791,12 +791,21 @@ Speech model panel.
 ```bash
 cd src-tauri
 cargo test --lib                  # colours, word filter, config, server gate,
-                                  # segmenter, tokenisers, mic gate, tunnel, versions
-# Transcribe a 16 kHz mono WAV with every installed ONNX model:
-CHATTERLAYER_TEST_WAV=some.wav cargo test --release --lib transcribes -- --ignored --nocapture
+                                  # tunnel, versions
 # Real downloads of a model of each shape, and of the pinned cloudflared:
 CHATTERLAYER_TEST_DIR=some/empty/dir cargo test --lib installs -- --ignored
 npm run lint                      # the window's scripts
+```
+
+The speech engines, segmenter, tokenisers and mic gate are in
+[LayerKit](https://github.com/ruptz/LayerKit)'s `layer-speech` crate, shared
+with the other Layer apps, and tested there:
+
+```bash
+cd ../LayerKit
+cargo test
+# Transcribe a 16 kHz mono WAV with every ONNX model in a folder:
+LAYER_TEST_WAV=some.wav LAYER_TEST_MODELS=../ChatterLayer/models cargo test --release transcribes -- --ignored --nocapture
 ```
 
 The model catalogue — URLs, pinned revisions, sizes and checksums — is
