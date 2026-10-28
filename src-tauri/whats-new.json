@@ -1,5 +1,11 @@
 [
   {
+    "version": "0.5.2",
+    "items": [
+      "Under the hood: the speech engines now live in LayerKit, shared with the other Layer apps. Captions work exactly as before."
+    ]
+  },
+  {
     "version": "0.5.1",
     "items": [
       "Much lighter on your PC when someone talks for a long stretch. Live captions used to re-read the whole sentence on every update, and the speech engine kept every core busy between words; now it only reads the newest part and rests in between."
