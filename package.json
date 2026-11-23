@@ -26,11 +26,11 @@
   },
   "dependencies": {},
   "devDependencies": {
-    "@tauri-apps/cli": "^2.12.4",
+    "@tauri-apps/cli": "^2.12.6",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^9.1.2",
-    "globals": "^17.12.0",
-    "prettier": "^3.9.8"
+    "globals": "^17.14.0",
+    "prettier": "^3.10.1"
   },
   "overrides": {
     "brace-expansion@1": "^1.1.21",
